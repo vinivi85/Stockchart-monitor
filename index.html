@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Stock Monitor</title>
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#0a0e14" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  :root{
+    --bg:#0a0e14;
+    --panel:#10151d;
+    --panel-2:#151b25;
+    --border:#1c2530;
+    --text:#e6edf5;
+    --text-dim:#7c8a9c;
+    --cyan:#4fc3f7;
+    --green:#34d399;
+    --amber:#fbbf24;
+    --red:#f87171;
+    --mono:'JetBrains Mono', monospace;
+    --sans:'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+    height:100%;overscroll-behavior:none;}
+  #root{min-height:100vh;display:flex;flex-direction:column;}
+  input,select,button{font-family:var(--sans);}
+  ::-webkit-scrollbar{width:0;height:0;}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+    border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:10;}
+  .brand{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:0.5px;color:var(--cyan);}
+  .brand .dim{color:var(--text-dim);font-weight:400;}
+
+  .market-tabs{display:flex;gap:0;margin:12px 16px 0;border:1px solid var(--border);border-radius:10px;
+    overflow:hidden;background:var(--panel);}
+  .market-tab{flex:1;padding:10px;text-align:center;font-family:var(--mono);font-size:13px;
+    font-weight:700;color:var(--text-dim);background:transparent;border:none;cursor:pointer;
+    letter-spacing:1px;}
+  .market-tab.active{color:var(--bg);background:var(--cyan);}
+
+  .content{flex:1;overflow-y:auto;padding:14px 16px 90px;}
+
+  .watch-item{display:flex;align-items:center;justify-content:space-between;padding:14px;
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;
+    cursor:pointer;position:relative;}
+  .watch-item:active{background:var(--panel-2);}
+  .watch-left{display:flex;flex-direction:column;gap:4px;}
+  .watch-ticker{font-family:var(--mono);font-weight:700;font-size:15px;}
+  .watch-name{font-size:11px;color:var(--text-dim);}
+  .watch-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+  .watch-price{font-family:var(--mono);font-weight:700;font-size:15px;}
+  .watch-pos{font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .watch-pos.pos{color:var(--green);}
+  .watch-pos.neg{color:var(--red);}
+  .signal-dot{position:absolute;top:10px;left:10px;width:8px;height:8px;border-radius:50%;
+    background:var(--green);box-shadow:0 0 8px var(--green);}
+
+  .fab{position:fixed;bottom:24px;right:20px;width:52px;height:52px;border-radius:16px;
+    background:var(--cyan);color:var(--bg);border:none;font-size:26px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(79,195,247,0.35);
+    cursor:pointer;z-index:20;}
+
+  .empty{text-align:center;color:var(--text-dim);margin-top:60px;font-size:13px;line-height:1.6;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;
+    z-index:50;}
+  .modal{background:var(--panel);border-top:1px solid var(--border);border-radius:18px 18px 0 0;
+    width:100%;padding:20px 16px calc(20px + env(safe-area-inset-bottom));max-height:85vh;overflow-y:auto;}
+  .modal h3{margin:0 0 16px;font-size:15px;font-family:var(--mono);color:var(--cyan);}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:6px;letter-spacing:0.3px;}
+  .field input,.field select{width:100%;padding:11px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:9px;color:var(--text);font-size:14px;font-family:var(--mono);}
+  .row2{display:flex;gap:10px;}
+  .row2 > *{flex:1;}
+  .btn{width:100%;padding:13px;border-radius:10px;border:none;font-weight:700;font-size:14px;
+    cursor:pointer;margin-top:6px;}
+  .btn-primary{background:var(--cyan);color:var(--bg);}
+  .btn-secondary{background:var(--panel-2);color:var(--text);border:1px solid var(--border);}
+  .btn-danger{background:transparent;color:var(--red);border:1px solid var(--red);}
+
+  .detail-header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);
+    background:var(--panel);position:sticky;top:0;z-index:10;}
+  .back-btn{background:none;border:none;color:var(--cyan);font-size:20px;cursor:pointer;padding:4px 8px 4px 0;}
+  .detail-ticker{font-family:var(--mono);font-weight:700;font-size:16px;}
+  .detail-price{font-family:var(--mono);font-size:16px;margin-left:auto;font-weight:700;}
+
+  .period-bar{display:flex;gap:6px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--border);}
+  .period-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    color:var(--text-dim);font-family:var(--mono);font-size:12px;font-weight:700;white-space:nowrap;
+    cursor:pointer;}
+  .period-btn.active{background:var(--cyan);color:var(--bg);border-color:var(--cyan);}
+
+  #chart-container{width:100%;height:380px;}
+
+  .indicator-panel{padding:10px 16px;border-bottom:1px solid var(--border);}
+  .indicator-panel-title{font-size:11px;color:var(--text-dim);letter-spacing:0.5px;margin-bottom:8px;}
+  .chip-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--panel);
+    color:var(--text-dim);font-size:12px;font-family:var(--mono);cursor:pointer;}
+  .chip.active{background:rgba(79,195,247,0.15);border-color:var(--cyan);color:var(--cyan);}
+
+  .tabbar-bottom{display:flex;border-top:1px solid var(--border);background:var(--panel);
+    padding-bottom:env(safe-area-inset-bottom);}
+  .tabbar-item{flex:1;padding:10px;text-align:center;font-size:11px;color:var(--text-dim);
+    background:none;border:none;cursor:pointer;font-family:var(--sans);}
+  .tabbar-item.active{color:var(--cyan);}
+
+  .rule-card{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px;
+    margin-bottom:10px;}
+  .rule-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .rule-indicator{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--cyan);}
+  .rule-toggle{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;
+    cursor:pointer;border:none;}
+  .rule-toggle.on{background:var(--green);}
+  .rule-toggle .knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:#fff;transition:left 0.15s;}
+  .rule-toggle.on .knob{left:18px;}
+  .rule-params{font-size:11px;color:var(--text-dim);font-family:var(--mono);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ============================================================
+// CONFIG — preencha com suas credenciais do Supabase
+// ============================================================
+const SUPABASE_URL = 'https://SEU-PROJETO.supabase.co';
+const SUPABASE_ANON_KEY = 'SUA_ANON_KEY';
+// Edge Function que faz proxy do Yahoo Finance (evita bloqueio de CORS no navegador)
+const QUOTE_PROXY_URL = SUPABASE_URL + '/functions/v1/yahoo-proxy';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// INDICADORES — cada função recebe candles [{time,open,high,low,close,volume}]
+// e devolve uma série pronta pra plotar ou pra checagem de regra.
+// ============================================================
+function sma(values, period) {
+  const out = [];
+  for (let i = 0; i < values.length; i++) {
+    if (i < period - 1) { out.push(null); continue; }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += values[j];
+    out.push(sum / period);
+  }
+  return out;
+}
+
+function ema(values, period) {
+  const out = [];
+  const k = 2 / (period + 1);
+  let prev = null;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] == null) { out.push(null); continue; }
+    if (prev == null) { prev = values[i]; out.push(prev); continue; }
+    prev = values[i] * k + prev * (1 - k);
+    out.push(prev);
+  }
+  return out;
+}
+
+function rsi(closes, period = 14) {
+  const out = new Array(closes.length).fill(null);
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period && i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff >= 0) gains += diff; else losses -= diff;
+  }
+  let avgGain = gains / period, avgLoss = losses / period;
+  out[period] = 100 - 100 / (1 + (avgLoss === 0 ? 100 : avgGain / avgLoss));
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    out[i] = 100 - 100 / (1 + (avgLoss === 0 ? 100 : avgGain / avgLoss));
+  }
+  return out;
+}
+
+function macd(closes, fast = 12, slow = 26, signalP = 9) {
+  const emaFast = ema(closes, fast);
+  const emaSlow = ema(closes, slow);
+  const line = closes.map((_, i) => (emaFast[i] != null && emaSlow[i] != null) ? emaFast[i] - emaSlow[i] : null);
+  const signal = ema(line.map(v => v == null ? 0 : v), signalP);
+  const hist = line.map((v, i) => (v != null && signal[i] != null) ? v - signal[i] : null);
+  return { line, signal, hist };
+}
+
+function bollinger(closes, period = 20, mult = 2) {
+  const mid = sma(closes, period);
+  const upper = [], lower = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (mid[i] == null) { upper.push(null); lower.push(null); continue; }
+    let sumSq = 0;
+    for (let j = i - period + 1; j <= i; j++) sumSq += Math.pow(closes[j] - mid[i], 2);
+    const std = Math.sqrt(sumSq / period);
+    upper.push(mid[i] + mult * std);
+    lower.push(mid[i] - mult * std);
+  }
+  return { mid, upper, lower };
+}
+
+function atr(candles, period = 14) {
+  const trs = candles.map((c, i) => {
+    if (i === 0) return c.high - c.low;
+    const prevClose = candles[i - 1].close;
+    return Math.max(c.high - c.low, Math.abs(c.high - prevClose), Math.abs(c.low - prevClose));
+  });
+  return ema(trs, period);
+}
+
+function stochastic(candles, period = 14, smoothK = 3) {
+  const rawK = candles.map((c, i) => {
+    if (i < period - 1) return null;
+    const slice = candles.slice(i - period + 1, i + 1);
+    const hi = Math.max(...slice.map(s => s.high));
+    const lo = Math.min(...slice.map(s => s.low));
+    return hi === lo ? 50 : ((c.close - lo) / (hi - lo)) * 100;
+  });
+  const k = sma(rawK.map(v => v == null ? 0 : v), smoothK);
+  const d = sma(k.map(v => v == null ? 0 : v), 3);
+  return { k, d };
+}
+
+function williamsR(candles, period = 14) {
+  return candles.map((c, i) => {
+    if (i < period - 1) return null;
+    const slice = candles.slice(i - period + 1, i + 1);
+    const hi = Math.max(...slice.map(s => s.high));
+    const lo = Math.min(...slice.map(s => s.low));
+    return hi === lo ? 0 : ((hi - c.close) / (hi - lo)) * -100;
+  });
+}
+
+function obv(candles) {
+  const out = [0];
+  for (let i = 1; i < candles.length; i++) {
+    const prev = out[i - 1];
+    if (candles[i].close > candles[i - 1].close) out.push(prev + candles[i].volume);
+    else if (candles[i].close < candles[i - 1].close) out.push(prev - candles[i].volume);
+    else out.push(prev);
+  }
+  return out;
+}
+
+function volumeRelative(candles, period = 20) {
+  const vols = candles.map(c => c.volume);
+  const avg = sma(vols, period);
+  return candles.map((c, i) => avg[i] ? c.volume / avg[i] : null);
+}
+
+// HiLo Activator (CHiLo) — período configurável manualmente
+function hilo(candles, period = 3) {
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+  const smaHigh = sma(highs, period);
+  const smaLow = sma(lows, period);
+  const line = new Array(candles.length).fill(null);
+  const trend = new Array(candles.length).fill(null); // 'up' | 'down'
+  let currentTrend = null;
+  for (let i = 0; i < candles.length; i++) {
+    if (smaHigh[i] == null || smaLow[i] == null) continue;
+    const close = candles[i].close;
+    if (close > smaHigh[i]) currentTrend = 'up';
+    else if (close < smaLow[i]) currentTrend = 'down';
+    trend[i] = currentTrend;
+    line[i] = currentTrend === 'up' ? smaLow[i] : currentTrend === 'down' ? smaHigh[i] : null;
+  }
+  return { line, trend };
+}
+
+function week52Range(candles) {
+  const last252 = candles.slice(-252);
+  const hi = Math.max(...last252.map(c => c.high));
+  const lo = Math.min(...last252.map(c => c.low));
+  const last = candles[candles.length - 1].close;
+  return { high52: hi, low52: lo, pctFromHigh: ((last - hi) / hi) * 100, pctFromLow: ((last - lo) / lo) * 100 };
+}
+
+function athDistance(candles) {
+  const ath = Math.max(...candles.map(c => c.high));
+  const last = candles[candles.length - 1].close;
+  return { ath, pctFromAth: ((last - ath) / ath) * 100 };
+}
+
+const INDICATORS = [
+  { key: 'sma_cross', label: 'Médias Móveis (SMA)', category: 'Tendência', defaultParams: { fast: 9, slow: 21 } },
+  { key: 'ema_cross', label: 'Médias Móveis (EMA)', category: 'Tendência', defaultParams: { fast: 9, slow: 21 } },
+  { key: 'hilo', label: 'HiLo Activator', category: 'Tendência', defaultParams: { period: 3 } },
+  { key: 'macd', label: 'MACD', category: 'Tendência', defaultParams: { fast: 12, slow: 26, signal: 9 } },
+  { key: 'adx', label: 'ADX', category: 'Tendência', defaultParams: { period: 14 } },
+  { key: 'ichimoku', label: 'Ichimoku Cloud', category: 'Tendência', defaultParams: {} },
+  { key: 'rsi', label: 'RSI', category: 'Momentum', defaultParams: { period: 14, threshold: 30 } },
+  { key: 'stochastic', label: 'Estocástico', category: 'Momentum', defaultParams: { period: 14, smoothK: 3 } },
+  { key: 'williams_r', label: 'Williams %R', category: 'Momentum', defaultParams: { period: 14 } },
+  { key: 'bollinger', label: 'Bandas de Bollinger', category: 'Volatilidade', defaultParams: { period: 20, stddev: 2 } },
+  { key: 'atr', label: 'ATR', category: 'Volatilidade', defaultParams: { period: 14 } },
+  { key: 'week52_range', label: 'Distância 52 semanas', category: 'Volatilidade', defaultParams: {} },
+  { key: 'ath_distance', label: 'Distância do topo (ATH)', category: 'Volatilidade', defaultParams: {} },
+  { key: 'support_resistance', label: 'Suporte/Resistência manual', category: 'Volatilidade', defaultParams: { level: null } },
+  { key: 'volume_relative', label: 'Volume Relativo', category: 'Volume', defaultParams: { period: 20 } },
+  { key: 'obv', label: 'OBV', category: 'Volume', defaultParams: {} },
+];
+
+const PERIODS = [
+  { key: '1D', days: 1 }, { key: '1S', days: 7 }, { key: '1M', days: 30 },
+  { key: '6M', days: 180 }, { key: '1A', days: 365 }, { key: 'Tudo', days: null },
+];
+
+// ============================================================
+// DATA — busca cotações via Edge Function proxy (Yahoo Finance)
+// ============================================================
+function toYahooSymbol(market, ticker) {
+  return market === 'BR' ? `${ticker}.SA` : ticker;
+}
+
+async function fetchQuote(market, ticker) {
+  const symbol = toYahooSymbol(market, ticker);
+  const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=quote`);
+  if (!res.ok) throw new Error('Falha ao buscar cotação');
+  return res.json(); // { price, change, changePercent }
+}
+
+async function fetchHistory(market, ticker, range = '1y', interval = '1d') {
+  const symbol = toYahooSymbol(market, ticker);
+  const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=history&range=${range}&interval=${interval}`);
+  if (!res.ok) throw new Error('Falha ao buscar histórico');
+  return res.json(); // { candles: [{time, open, high, low, close, volume}] }
+}
+
+// ============================================================
+// UI COMPONENTS
+// ============================================================
+function fmtCurrency(v, market) {
+  if (v == null || isNaN(v)) return '—';
+  const symbol = market === 'BR' ? 'R$' : 'US$';
+  return `${symbol} ${v.toFixed(2)}`;
+}
+
+function AddTickerModal({ market, onClose, onAdded }) {
+  const [ticker, setTicker] = useState('');
+  const [name, setName] = useState('');
+  const [qty, setQty] = useState('');
+  const [avgPrice, setAvgPrice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!ticker.trim()) return;
+    setSaving(true);
+    try {
+      const yahoo_symbol = toYahooSymbol(market, ticker.trim().toUpperCase());
+      const { data, error } = await supabase.from('watchlist').insert({
+        market, ticker: ticker.trim().toUpperCase(), yahoo_symbol, name: name.trim() || null,
+      }).select().single();
+      if (error) throw error;
+      if (qty && avgPrice) {
+        await supabase.from('positions').insert({
+          watchlist_id: data.id, quantity: parseFloat(qty), avg_price: parseFloat(avgPrice),
+        });
+      }
+      onAdded();
+      onClose();
+    } catch (e) {
+      alert('Erro ao adicionar: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h3>Adicionar ação · {market}</h3>
+        <div className="field">
+          <label>Ticker ({market === 'BR' ? 'ex: PETR4' : 'ex: AAPL'})</label>
+          <input value={ticker} onChange={e => setTicker(e.target.value)} placeholder={market === 'BR' ? 'PETR4' : 'AAPL'} />
+        </div>
+        <div className="field">
+          <label>Nome (opcional)</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Petrobras" />
+        </div>
+        <div className="row2">
+          <div className="field">
+            <label>Quantidade (se tiver posição)</label>
+            <input value={qty} onChange={e => setQty(e.target.value)} type="number" placeholder="0" />
+          </div>
+          <div className="field">
+            <label>Preço médio</label>
+            <input value={avgPrice} onChange={e => setAvgPrice(e.target.value)} type="number" placeholder="0.00" />
+          </div>
+        </div>
+        <button className="btn btn-primary" disabled={saving} onClick={save}>
+          {saving ? 'Salvando…' : 'Adicionar'}
+        </button>
+        <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function WatchlistView({ market, items, quotes, positions, onOpen, onAdd }) {
+  if (items.length === 0) {
+    return (
+      <div className="empty">
+        Nenhuma ação monitorada em {market} ainda.<br />
+        Toque no + para adicionar.
+      </div>
+    );
+  }
+  return (
+    <div>
+      {items.map(item => {
+        const q = quotes[item.id];
+        const pos = positions[item.id];
+        const posValue = pos && q ? pos.quantity * q.price : null;
+        const posCost = pos ? pos.quantity * pos.avg_price : null;
+        const posDiff = posValue != null && posCost != null ? posValue - posCost : null;
+        return (
+          <div key={item.id} className="watch-item" onClick={() => onOpen(item)}>
+            {item.hasSignal && <div className="signal-dot" />}
+            <div className="watch-left">
+              <div className="watch-ticker">{item.ticker}</div>
+              {item.name && <div className="watch-name">{item.name}</div>}
+            </div>
+            <div className="watch-right">
+              <div className="watch-price">{q ? fmtCurrency(q.price, market) : '…'}</div>
+              {pos ? (
+                <div className={`watch-pos ${posDiff >= 0 ? 'pos' : 'neg'}`}>
+                  {pos.quantity} un · {fmtCurrency(posValue, market)}
+                </div>
+              ) : (
+                <div className="watch-pos">sem posição</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TickerDetail({ item, market, onBack }) {
+  const chartRef = useRef(null);
+  const chartApiRef = useRef(null);
+  const seriesRef = useRef(null);
+  const [candles, setCandles] = useState([]);
+  const [period, setPeriod] = useState('6M');
+  const [activeIndicators, setActiveIndicators] = useState({});
+  const [showConfig, setShowConfig] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchHistory(market, item.ticker, '1y', '1d')
+      .then(data => { if (!cancelled) setCandles(data.candles || []); })
+      .catch(() => { if (!cancelled) setCandles([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [item.ticker, market]);
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = LightweightCharts.createChart(chartRef.current, {
+      layout: { background: { color: '#10151d' }, textColor: '#7c8a9c', fontFamily: 'JetBrains Mono' },
+      grid: { vertLines: { color: '#1c2530' }, horzLines: { color: '#1c2530' } },
+      width: chartRef.current.clientWidth,
+      height: 380,
+      timeScale: { borderColor: '#1c2530' },
+      rightPriceScale: { borderColor: '#1c2530' },
+    });
+    const series = chart.addCandlestickSeries({
+      upColor: '#34d399', downColor: '#f87171', borderVisible: false,
+      wickUpColor: '#34d399', wickDownColor: '#f87171',
+    });
+    chartApiRef.current = chart;
+    seriesRef.current = series;
+    const resize = () => chart.applyOptions({ width: chartRef.current.clientWidth });
+    window.addEventListener('resize', resize);
+    return () => { window.removeEventListener('resize', resize); chart.remove(); };
+  }, []);
+
+  const filteredCandles = useMemo(() => {
+    const p = PERIODS.find(p => p.key === period);
+    if (!p || p.days == null) return candles;
+    const cutoff = Date.now() / 1000 - p.days * 86400;
+    return candles.filter(c => c.time >= cutoff);
+  }, [candles, period]);
+
+  useEffect(() => {
+    if (!seriesRef.current || filteredCandles.length === 0) return;
+    seriesRef.current.setData(filteredCandles);
+    chartApiRef.current.timeScale().fitContent();
+  }, [filteredCandles]);
+
+  // plota overlays de indicadores ativos como linhas adicionais
+  const overlaySeriesRef = useRef([]);
+  useEffect(() => {
+    if (!chartApiRef.current || filteredCandles.length === 0) return;
+    overlaySeriesRef.current.forEach(s => chartApiRef.current.removeSeries(s));
+    overlaySeriesRef.current = [];
+    const closes = filteredCandles.map(c => c.close);
+
+    if (activeIndicators.hilo) {
+      const period = activeIndicators.hilo.period || 3;
+      const { line } = hilo(filteredCandles, period);
+      const s = chartApiRef.current.addLineSeries({ color: '#4fc3f7', lineWidth: 2 });
+      s.setData(filteredCandles.map((c, i) => ({ time: c.time, value: line[i] })).filter(d => d.value != null));
+      overlaySeriesRef.current.push(s);
+    }
+    if (activeIndicators.sma_cross) {
+      const { fast, slow } = activeIndicators.sma_cross;
+      const fastS = sma(closes, fast), slowS = sma(closes, slow);
+      const s1 = chartApiRef.current.addLineSeries({ color: '#fbbf24', lineWidth: 1 });
+      const s2 = chartApiRef.current.addLineSeries({ color: '#f87171', lineWidth: 1 });
+      s1.setData(filteredCandles.map((c, i) => ({ time: c.time, value: fastS[i] })).filter(d => d.value != null));
+      s2.setData(filteredCandles.map((c, i) => ({ time: c.time, value: slowS[i] })).filter(d => d.value != null));
+      overlaySeriesRef.current.push(s1, s2);
+    }
+    if (activeIndicators.bollinger) {
+      const { period: p, stddev } = activeIndicators.bollinger;
+      const { upper, lower } = bollinger(closes, p, stddev);
+      const s1 = chartApiRef.current.addLineSeries({ color: '#7c8a9c', lineWidth: 1 });
+      const s2 = chartApiRef.current.addLineSeries({ color: '#7c8a9c', lineWidth: 1 });
+      s1.setData(filteredCandles.map((c, i) => ({ time: c.time, value: upper[i] })).filter(d => d.value != null));
+      s2.setData(filteredCandles.map((c, i) => ({ time: c.time, value: lower[i] })).filter(d => d.value != null));
+      overlaySeriesRef.current.push(s1, s2);
+    }
+  }, [activeIndicators, filteredCandles]);
+
+  const toggleIndicator = (key) => {
+    setActiveIndicators(prev => {
+      const next = { ...prev };
+      if (next[key]) delete next[key];
+      else {
+        const def = INDICATORS.find(i => i.key === key);
+        next[key] = { ...def.defaultParams };
+      }
+      return next;
+    });
+  };
+
+  const updateIndicatorParam = (key, paramKey, value) => {
+    setActiveIndicators(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [paramKey]: parseFloat(value) || value },
+    }));
+  };
+
+  const lastPrice = candles.length ? candles[candles.length - 1].close : null;
+
+  const grouped = useMemo(() => {
+    const g = {};
+    INDICATORS.forEach(ind => { (g[ind.category] = g[ind.category] || []).push(ind); });
+    return g;
+  }, []);
+
+  return (
+    <div>
+      <div className="detail-header">
+        <button className="back-btn" onClick={onBack}>‹</button>
+        <div className="detail-ticker">{item.ticker}</div>
+        <div className="detail-price">{lastPrice ? fmtCurrency(lastPrice, market) : (loading ? '…' : '—')}</div>
+      </div>
+
+      <div className="period-bar">
+        {PERIODS.map(p => (
+          <button key={p.key} className={`period-btn ${period === p.key ? 'active' : ''}`}
+            onClick={() => setPeriod(p.key)}>{p.key}</button>
+        ))}
+      </div>
+
+      <div id="chart-container" ref={chartRef}></div>
+
+      {Object.entries(grouped).map(([category, inds]) => (
+        <div className="indicator-panel" key={category}>
+          <div className="indicator-panel-title">{category.toUpperCase()}</div>
+          <div className="chip-row">
+            {inds.map(ind => (
+              <button key={ind.key} className={`chip ${activeIndicators[ind.key] ? 'active' : ''}`}
+                onClick={() => toggleIndicator(ind.key)}>{ind.label}</button>
+            ))}
+          </div>
+          {inds.map(ind => activeIndicators[ind.key] && Object.keys(ind.defaultParams).length > 0 && (
+            <div key={ind.key + '-params'} style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {Object.entries(ind.defaultParams).map(([pk, pv]) => (
+                <div key={pk} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{pk}</span>
+                  <input type="number" defaultValue={activeIndicators[ind.key][pk] ?? pv}
+                    onChange={e => updateIndicatorParam(ind.key, pk, e.target.value)}
+                    style={{ width: 54, padding: '4px 6px', fontSize: 12, background: 'var(--panel-2)',
+                      border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontFamily: 'var(--mono)' }} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <div style={{ padding: '16px' }}>
+        <button className="btn btn-secondary" onClick={() => setShowConfig(true)}>
+          ⚙ Configurar monitoramento (sinal de entrada)
+        </button>
+      </div>
+
+      {showConfig && (
+        <MonitoringConfigModal item={item} onClose={() => setShowConfig(false)} />
+      )}
+    </div>
+  );
+}
+
+function MonitoringConfigModal({ item, onClose }) {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [addingIndicator, setAddingIndicator] = useState(INDICATORS[0].key);
+  const [interval, setIntervalVal] = useState(15);
+
+  const loadRules = useCallback(async () => {
+    const { data } = await supabase.from('monitoring_rules').select('*').eq('watchlist_id', item.id);
+    setRules(data || []);
+    setLoading(false);
+  }, [item.id]);
+
+  useEffect(() => { loadRules(); }, [loadRules]);
+
+  const addRule = async () => {
+    const def = INDICATORS.find(i => i.key === addingIndicator);
+    await supabase.from('monitoring_rules').insert({
+      watchlist_id: item.id,
+      indicator_type: addingIndicator,
+      condition: 'cross_above',
+      params: def.defaultParams,
+      check_interval_minutes: interval,
+      active: true,
+    });
+    loadRules();
+  };
+
+  const toggleRule = async (rule) => {
+    await supabase.from('monitoring_rules').update({ active: !rule.active }).eq('id', rule.id);
+    loadRules();
+  };
+
+  const deleteRule = async (rule) => {
+    await supabase.from('monitoring_rules').delete().eq('id', rule.id);
+    loadRules();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h3>Monitoramento · {item.ticker}</h3>
+
+        {!loading && rules.map(rule => (
+          <div className="rule-card" key={rule.id}>
+            <div className="rule-top">
+              <span className="rule-indicator">
+                {INDICATORS.find(i => i.key === rule.indicator_type)?.label || rule.indicator_type}
+              </span>
+              <button className={`rule-toggle ${rule.active ? 'on' : ''}`} onClick={() => toggleRule(rule)}>
+                <div className="knob" />
+              </button>
+            </div>
+            <div className="rule-params">
+              {JSON.stringify(rule.params)} · checa a cada {rule.check_interval_minutes}min
+            </div>
+            <button className="btn btn-danger" style={{ marginTop: 8, padding: '8px' }} onClick={() => deleteRule(rule)}>
+              Remover
+            </button>
+          </div>
+        ))}
+
+        <div className="field" style={{ marginTop: 16 }}>
+          <label>Novo indicador</label>
+          <select value={addingIndicator} onChange={e => setAddingIndicator(e.target.value)}>
+            {INDICATORS.map(ind => <option key={ind.key} value={ind.key}>{ind.label}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Intervalo de checagem</label>
+          <select value={interval} onChange={e => setIntervalVal(parseInt(e.target.value))}>
+            <option value={5}>5 minutos</option>
+            <option value={15}>15 minutos</option>
+            <option value={30}>30 minutos</option>
+          </select>
+        </div>
+        <button className="btn btn-primary" onClick={addRule}>Adicionar regra</button>
+        <button className="btn btn-secondary" onClick={onClose}>Fechar</button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [market, setMarket] = useState('BR');
+  const [items, setItems] = useState([]);
+  const [quotes, setQuotes] = useState({});
+  const [positions, setPositions] = useState({});
+  const [selected, setSelected] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const loadWatchlist = useCallback(async () => {
+    const { data: wl } = await supabase.from('watchlist').select('*').eq('market', market);
+    setItems(wl || []);
+    if (wl && wl.length) {
+      const { data: pos } = await supabase.from('positions').select('*').in('watchlist_id', wl.map(w => w.id));
+      const posMap = {};
+      (pos || []).forEach(p => { posMap[p.watchlist_id] = p; });
+      setPositions(posMap);
+
+      const quoteMap = {};
+      await Promise.all(wl.map(async (w) => {
+        try {
+          const q = await fetchQuote(market, w.ticker);
+          quoteMap[w.id] = q;
+        } catch (e) { /* offline ou proxy não configurado ainda */ }
+      }));
+      setQuotes(quoteMap);
+    }
+  }, [market]);
+
+  useEffect(() => { loadWatchlist(); }, [loadWatchlist]);
+
+  if (selected) {
+    return <TickerDetail item={selected} market={market} onBack={() => setSelected(null)} />;
+  }
+
+  return (
+    <React.Fragment>
+      <div className="topbar">
+        <div className="brand">STOCK<span className="dim">·MONITOR</span></div>
+      </div>
+
+      <div className="market-tabs">
+        <button className={`market-tab ${market === 'BR' ? 'active' : ''}`} onClick={() => setMarket('BR')}>B3 · BRASIL</button>
+        <button className={`market-tab ${market === 'US' ? 'active' : ''}`} onClick={() => setMarket('US')}>US · AMÉRICA</button>
+      </div>
+
+      <div className="content">
+        <WatchlistView market={market} items={items} quotes={quotes} positions={positions}
+          onOpen={setSelected} />
+      </div>
+
+      <button className="fab" onClick={() => setShowAdd(true)}>+</button>
+
+      {showAdd && (
+        <AddTickerModal market={market} onClose={() => setShowAdd(false)} onAdded={loadWatchlist} />
+      )}
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
