@@ -101,8 +101,19 @@
   .detail-ticker{font-family:var(--mono);font-weight:700;font-size:16px;}
   .detail-price{font-family:var(--mono);font-size:16px;margin-left:auto;font-weight:700;}
 
-  .period-bar{display:flex;gap:6px;
-    padding:10px calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left));
+  .bar-label{font-family:var(--mono);font-size:10px;color:var(--text-dim);align-self:center;
+    margin-right:2px;white-space:nowrap;}
+
+  .interval-bar{display:flex;gap:6px;align-items:center;
+    padding:10px calc(16px + env(safe-area-inset-right)) 6px calc(16px + env(safe-area-inset-left));
+    overflow-x:auto;}
+  .interval-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    color:var(--text-dim);font-family:var(--mono);font-size:12px;font-weight:700;white-space:nowrap;
+    cursor:pointer;}
+  .interval-btn.active{background:var(--amber);color:var(--bg);border-color:var(--amber);}
+
+  .period-bar{display:flex;gap:6px;align-items:center;
+    padding:6px calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left));
     overflow-x:auto;border-bottom:1px solid var(--border);}
   .period-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
     color:var(--text-dim);font-family:var(--mono);font-size:12px;font-weight:700;white-space:nowrap;
@@ -245,6 +256,13 @@
     { key: "5A", days: 1825 },
     { key: "Tudo", days: null }
   ];
+  const INTERVALS = [
+    { key: "15M", value: "15m", maxRange: "60d" },
+    { key: "1H", value: "60m", maxRange: "730d" },
+    { key: "1D", value: "1d", maxRange: "10y" },
+    { key: "1S", value: "1wk", maxRange: "10y" },
+    { key: "1M", value: "1mo", maxRange: "10y" }
+  ];
   function toYahooSymbol(market, ticker) {
     return market === "BR" ? `${ticker}.SA` : ticker;
   }
@@ -323,6 +341,7 @@
     const seriesRef = useRef(null);
     const [candles, setCandles] = useState([]);
     const [period, setPeriod] = useState("6M");
+    const [interval, setInterval_] = useState("1D");
     const [activeIndicators, setActiveIndicators] = useState({});
     const [showConfig, setShowConfig] = useState(false);
     const [openCategory, setOpenCategory] = useState(null);
@@ -330,7 +349,8 @@
     useEffect(() => {
       let cancelled = false;
       setLoading(true);
-      fetchHistory(market, item.ticker, "10y", "1d").then((data) => {
+      const intervalDef = INTERVALS.find((i) => i.key === interval) || INTERVALS[2];
+      fetchHistory(market, item.ticker, intervalDef.maxRange, intervalDef.value).then((data) => {
         if (!cancelled) setCandles(data.candles || []);
       }).catch(() => {
         if (!cancelled) setCandles([]);
@@ -340,7 +360,7 @@
       return () => {
         cancelled = true;
       };
-    }, [item.ticker, market]);
+    }, [item.ticker, market, interval]);
     useEffect(() => {
       if (!chartRef.current) return;
       const chart = LightweightCharts.createChart(chartRef.current, {
@@ -435,7 +455,15 @@
       });
       return g;
     }, []);
-    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "detail-header" }, /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: onBack }, "\u2039"), /* @__PURE__ */ React.createElement("div", { className: "detail-ticker" }, item.ticker), /* @__PURE__ */ React.createElement("div", { className: "detail-price" }, lastPrice ? fmtCurrency(lastPrice, market) : loading ? "\u2026" : "\u2014")), /* @__PURE__ */ React.createElement("div", { className: "period-bar" }, PERIODS.map((p) => /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "detail-header" }, /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: onBack }, "\u2039"), /* @__PURE__ */ React.createElement("div", { className: "detail-ticker" }, item.ticker), /* @__PURE__ */ React.createElement("div", { className: "detail-price" }, lastPrice ? fmtCurrency(lastPrice, market) : loading ? "\u2026" : "\u2014")), /* @__PURE__ */ React.createElement("div", { className: "interval-bar" }, /* @__PURE__ */ React.createElement("span", { className: "bar-label" }, "Tempo gr\xE1fico"), INTERVALS.map((i) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: i.key,
+        className: `interval-btn ${interval === i.key ? "active" : ""}`,
+        onClick: () => setInterval_(i.key)
+      },
+      i.key
+    ))), /* @__PURE__ */ React.createElement("div", { className: "period-bar" }, /* @__PURE__ */ React.createElement("span", { className: "bar-label" }, "Per\xEDodo"), PERIODS.map((p) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: p.key,
