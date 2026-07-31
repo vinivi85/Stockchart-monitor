@@ -143,10 +143,25 @@
     background:#fff;transition:left 0.15s;}
   .rule-toggle.on .knob{left:18px;}
   .rule-params{font-size:11px;color:var(--text-dim);font-family:var(--mono);}
+
+  #rotate-overlay{display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);
+    flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;}
+  .rotate-icon{font-size:48px;color:var(--cyan);animation:rotate-hint 1.8s ease-in-out infinite;}
+  .rotate-text{font-family:var(--mono);font-size:14px;color:var(--text-dim);line-height:1.6;}
+  @keyframes rotate-hint{0%,100%{transform:rotate(0deg);}50%{transform:rotate(-90deg);}}
+  @media (orientation: landscape){
+    #root{display:none;}
+    #rotate-overlay{display:flex;}
+  }
 </style>
 </head>
 <body>
 <div id="root"></div>
+
+<div id="rotate-overlay">
+  <div class="rotate-icon">⟳</div>
+  <div class="rotate-text">Gire seu aparelho de volta<br/>para o modo retrato</div>
+</div>
 
 <script>
 (() => {
@@ -577,6 +592,10 @@
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("./sw.js").catch(() => {
       });
+    });
+  }
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock("portrait").catch(() => {
     });
   }
 })();
