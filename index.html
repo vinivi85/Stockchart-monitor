@@ -208,6 +208,25 @@
     }
     return out;
   }
+  function ema(values, period) {
+    const out = [];
+    const k = 2 / (period + 1);
+    let prev = null;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] == null) {
+        out.push(null);
+        continue;
+      }
+      if (prev == null) {
+        prev = values[i];
+        out.push(prev);
+        continue;
+      }
+      prev = values[i] * k + prev * (1 - k);
+      out.push(prev);
+    }
+    return out;
+  }
   function rsi(closes, period = 14) {
     const out = new Array(closes.length).fill(null);
     let gains = 0, losses = 0;
@@ -228,6 +247,14 @@
     }
     return out;
   }
+  function macd(closes, fast = 12, slow = 26, signalP = 9) {
+    const emaFast = ema(closes, fast);
+    const emaSlow = ema(closes, slow);
+    const line = closes.map((_, i) => emaFast[i] != null && emaSlow[i] != null ? emaFast[i] - emaSlow[i] : null);
+    const signal = ema(line.map((v) => v == null ? 0 : v), signalP);
+    const hist = line.map((v, i) => v != null && signal[i] != null ? v - signal[i] : null);
+    return { line, signal, hist };
+  }
   function bollinger(closes, period = 20, mult = 2) {
     const mid = sma(closes, period);
     const upper = [], lower = [];
@@ -244,6 +271,35 @@
       lower.push(mid[i] - mult * std);
     }
     return { mid, upper, lower };
+  }
+  function atr(candles, period = 14) {
+    const trs = candles.map((c, i) => {
+      if (i === 0) return c.high - c.low;
+      const prevClose = candles[i - 1].close;
+      return Math.max(c.high - c.low, Math.abs(c.high - prevClose), Math.abs(c.low - prevClose));
+    });
+    return ema(trs, period);
+  }
+  function stochastic(candles, period = 14, smoothK = 3) {
+    const rawK = candles.map((c, i) => {
+      if (i < period - 1) return null;
+      const slice = candles.slice(i - period + 1, i + 1);
+      const hi = Math.max(...slice.map((s) => s.high));
+      const lo = Math.min(...slice.map((s) => s.low));
+      return hi === lo ? 50 : (c.close - lo) / (hi - lo) * 100;
+    });
+    const k = sma(rawK.map((v) => v == null ? 0 : v), smoothK);
+    const d = sma(k.map((v) => v == null ? 0 : v), 3);
+    return { k, d };
+  }
+  function williamsR(candles, period = 14) {
+    return candles.map((c, i) => {
+      if (i < period - 1) return null;
+      const slice = candles.slice(i - period + 1, i + 1);
+      const hi = Math.max(...slice.map((s) => s.high));
+      const lo = Math.min(...slice.map((s) => s.low));
+      return hi === lo ? 0 : (hi - c.close) / (hi - lo) * -100;
+    });
   }
   function obv(candles) {
     const out = [0];
@@ -272,6 +328,67 @@
       line[i] = currentTrend === "up" ? smaLow[i] : currentTrend === "down" ? smaHigh[i] : null;
     }
     return { line, trend };
+  }
+  function week52Range(candles) {
+    const last252 = candles.slice(-252);
+    const hi = Math.max(...last252.map((c) => c.high));
+    const lo = Math.min(...last252.map((c) => c.low));
+    const last = candles[candles.length - 1].close;
+    return { high52: hi, low52: lo, pctFromHigh: (last - hi) / hi * 100, pctFromLow: (last - lo) / lo * 100 };
+  }
+  function athDistance(candles) {
+    const ath = Math.max(...candles.map((c) => c.high));
+    const last = candles[candles.length - 1].close;
+    return { ath, pctFromAth: (last - ath) / ath * 100 };
+  }
+  function adx(candles, period = 14) {
+    const n = candles.length;
+    const plusDM = [0], minusDM = [0], tr = [candles[0].high - candles[0].low];
+    for (let i = 1; i < n; i++) {
+      const upMove = candles[i].high - candles[i - 1].high;
+      const downMove = candles[i - 1].low - candles[i].low;
+      plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+      minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+      tr.push(Math.max(
+        candles[i].high - candles[i].low,
+        Math.abs(candles[i].high - candles[i - 1].close),
+        Math.abs(candles[i].low - candles[i - 1].close)
+      ));
+    }
+    const smoothedTR = ema(tr, period);
+    const smoothedPlusDM = ema(plusDM, period);
+    const smoothedMinusDM = ema(minusDM, period);
+    const plusDI = smoothedPlusDM.map((v, i) => smoothedTR[i] ? v / smoothedTR[i] * 100 : null);
+    const minusDI = smoothedMinusDM.map((v, i) => smoothedTR[i] ? v / smoothedTR[i] * 100 : null);
+    const dx = plusDI.map((p, i) => {
+      if (p == null || minusDI[i] == null) return null;
+      const sum = p + minusDI[i];
+      return sum ? Math.abs(p - minusDI[i]) / sum * 100 : null;
+    });
+    const adxLine = ema(dx.map((v) => v == null ? 0 : v), period);
+    return { adx: adxLine, plusDI, minusDI };
+  }
+  function ichimoku(candles, conversionPeriod = 9, basePeriod = 26, spanBPeriod = 52) {
+    const highLowAvg = (period, i) => {
+      if (i < period - 1) return null;
+      let hi = -Infinity, lo = Infinity;
+      for (let j = i - period + 1; j <= i; j++) {
+        hi = Math.max(hi, candles[j].high);
+        lo = Math.min(lo, candles[j].low);
+      }
+      return (hi + lo) / 2;
+    };
+    const n = candles.length;
+    const tenkan = [], kijun = [], senkouA = [], senkouB = [];
+    for (let i = 0; i < n; i++) {
+      tenkan.push(highLowAvg(conversionPeriod, i));
+      kijun.push(highLowAvg(basePeriod, i));
+    }
+    for (let i = 0; i < n; i++) {
+      senkouA.push(tenkan[i] != null && kijun[i] != null ? (tenkan[i] + kijun[i]) / 2 : null);
+      senkouB.push(highLowAvg(spanBPeriod, i));
+    }
+    return { tenkan, kijun, senkouA, senkouB };
   }
   const INDICATORS = [
     { key: "sma_cross", label: "M\xE9dias M\xF3veis (SMA)", category: "Tend\xEAncia", defaultParams: { fast: 9, slow: 21 } },
@@ -462,11 +579,15 @@
       chartApiRef.current.timeScale().fitContent();
     }, [filteredCandles]);
     const overlaySeriesRef = useRef([]);
+    const overlayPriceLinesRef = useRef([]);
     useEffect(() => {
       if (!chartApiRef.current || filteredCandles.length === 0) return;
       overlaySeriesRef.current.forEach((s) => chartApiRef.current.removeSeries(s));
       overlaySeriesRef.current = [];
+      overlayPriceLinesRef.current.forEach((l) => seriesRef.current.removePriceLine(l));
+      overlayPriceLinesRef.current = [];
       const closes = filteredCandles.map((c) => c.close);
+      const times = filteredCandles.map((c) => c.time);
       if (activeIndicators.hilo) {
         const hiloPeriod = activeIndicators.hilo.period || 3;
         const { line, trend } = hilo(filteredCandles, hiloPeriod);
@@ -538,6 +659,137 @@
         chartApiRef.current.priceScale("obv").applyOptions({ scaleMargins: { top: 0.1, bottom: 0.5 } });
         s.setData(filteredCandles.map((c, i) => ({ time: c.time, value: obvVals[i] })));
         overlaySeriesRef.current.push(s);
+      }
+      if (activeIndicators.ema_cross) {
+        const { fast, slow } = activeIndicators.ema_cross;
+        const fastS = ema(closes, fast), slowS = ema(closes, slow);
+        const s1 = chartApiRef.current.addLineSeries({ color: "#34d399", lineWidth: 1 });
+        const s2 = chartApiRef.current.addLineSeries({ color: "#f87171", lineWidth: 1 });
+        s1.setData(times.map((t, i) => ({ time: t, value: fastS[i] })).filter((d) => d.value != null));
+        s2.setData(times.map((t, i) => ({ time: t, value: slowS[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(s1, s2);
+      }
+      if (activeIndicators.macd) {
+        const { fast, slow, signal } = activeIndicators.macd;
+        const { line, signal: sig, hist } = macd(closes, fast, slow, signal);
+        chartApiRef.current.priceScale("macd").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+        const histSeries = chartApiRef.current.addHistogramSeries({ priceScaleId: "macd" });
+        histSeries.setData(times.map((t, i) => {
+          var _a, _b;
+          return {
+            time: t,
+            value: (_a = hist[i]) != null ? _a : 0,
+            color: ((_b = hist[i]) != null ? _b : 0) >= 0 ? "rgba(52,211,153,0.6)" : "rgba(248,113,113,0.6)"
+          };
+        }).filter((d, i) => hist[i] != null));
+        const lineSeries = chartApiRef.current.addLineSeries({ color: "#4fc3f7", lineWidth: 1, priceScaleId: "macd" });
+        lineSeries.setData(times.map((t, i) => ({ time: t, value: line[i] })).filter((d) => d.value != null));
+        const sigSeries = chartApiRef.current.addLineSeries({ color: "#fbbf24", lineWidth: 1, priceScaleId: "macd" });
+        sigSeries.setData(times.map((t, i) => ({ time: t, value: sig[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(histSeries, lineSeries, sigSeries);
+      }
+      if (activeIndicators.adx) {
+        const { period: p } = activeIndicators.adx;
+        const { adx: adxLine, plusDI, minusDI } = adx(filteredCandles, p);
+        chartApiRef.current.priceScale("adx").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+        const s1 = chartApiRef.current.addLineSeries({ color: "#4fc3f7", lineWidth: 2, priceScaleId: "adx" });
+        const s2 = chartApiRef.current.addLineSeries({ color: "#34d399", lineWidth: 1, priceScaleId: "adx" });
+        const s3 = chartApiRef.current.addLineSeries({ color: "#f87171", lineWidth: 1, priceScaleId: "adx" });
+        s1.setData(times.map((t, i) => ({ time: t, value: adxLine[i] })).filter((d) => d.value != null));
+        s2.setData(times.map((t, i) => ({ time: t, value: plusDI[i] })).filter((d) => d.value != null));
+        s3.setData(times.map((t, i) => ({ time: t, value: minusDI[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(s1, s2, s3);
+      }
+      if (activeIndicators.ichimoku) {
+        const { tenkan, kijun, senkouA, senkouB } = ichimoku(filteredCandles);
+        const s1 = chartApiRef.current.addLineSeries({ color: "#f87171", lineWidth: 1 });
+        const s2 = chartApiRef.current.addLineSeries({ color: "#4fc3f7", lineWidth: 1 });
+        const s3 = chartApiRef.current.addLineSeries({ color: "#34d399", lineWidth: 1 });
+        const s4 = chartApiRef.current.addLineSeries({ color: "#fbbf24", lineWidth: 1 });
+        s1.setData(times.map((t, i) => ({ time: t, value: tenkan[i] })).filter((d) => d.value != null));
+        s2.setData(times.map((t, i) => ({ time: t, value: kijun[i] })).filter((d) => d.value != null));
+        s3.setData(times.map((t, i) => ({ time: t, value: senkouA[i] })).filter((d) => d.value != null));
+        s4.setData(times.map((t, i) => ({ time: t, value: senkouB[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(s1, s2, s3, s4);
+      }
+      if (activeIndicators.rsi) {
+        const { period: p } = activeIndicators.rsi;
+        const rsiVals = rsi(closes, p);
+        chartApiRef.current.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+        const s = chartApiRef.current.addLineSeries({ color: "#4fc3f7", lineWidth: 1, priceScaleId: "rsi" });
+        s.setData(times.map((t, i) => ({ time: t, value: rsiVals[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(s);
+      }
+      if (activeIndicators.stochastic) {
+        const { period: p, smoothK } = activeIndicators.stochastic;
+        const { k, d } = stochastic(filteredCandles, p, smoothK);
+        chartApiRef.current.priceScale("stoch").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+        const s1 = chartApiRef.current.addLineSeries({ color: "#4fc3f7", lineWidth: 1, priceScaleId: "stoch" });
+        const s2 = chartApiRef.current.addLineSeries({ color: "#fbbf24", lineWidth: 1, priceScaleId: "stoch" });
+        s1.setData(times.map((t, i) => ({ time: t, value: k[i] })).filter((d2) => d2.value != null));
+        s2.setData(times.map((t, i) => ({ time: t, value: d[i] })).filter((d2) => d2.value != null));
+        overlaySeriesRef.current.push(s1, s2);
+      }
+      if (activeIndicators.williams_r) {
+        const { period: p } = activeIndicators.williams_r;
+        const wr = williamsR(filteredCandles, p);
+        chartApiRef.current.priceScale("williams").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+        const s = chartApiRef.current.addLineSeries({ color: "#a78bfa", lineWidth: 1, priceScaleId: "williams" });
+        s.setData(times.map((t, i) => ({ time: t, value: wr[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(s);
+      }
+      if (activeIndicators.atr) {
+        const { period: p } = activeIndicators.atr;
+        const atrVals = atr(filteredCandles, p);
+        chartApiRef.current.priceScale("atr").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+        const s = chartApiRef.current.addLineSeries({ color: "#fbbf24", lineWidth: 1, priceScaleId: "atr" });
+        s.setData(times.map((t, i) => ({ time: t, value: atrVals[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(s);
+      }
+      if (activeIndicators.week52_range) {
+        const { high52, low52 } = week52Range(filteredCandles);
+        overlayPriceLinesRef.current.push(
+          seriesRef.current.createPriceLine({
+            price: high52,
+            color: "#f87171",
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            title: "52s m\xE1x"
+          }),
+          seriesRef.current.createPriceLine({
+            price: low52,
+            color: "#34d399",
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            title: "52s m\xEDn"
+          })
+        );
+      }
+      if (activeIndicators.ath_distance) {
+        const { ath } = athDistance(filteredCandles);
+        overlayPriceLinesRef.current.push(
+          seriesRef.current.createPriceLine({
+            price: ath,
+            color: "#fbbf24",
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+            title: "ATH"
+          })
+        );
+      }
+      if (activeIndicators.support_resistance && activeIndicators.support_resistance.level) {
+        const lvl = parseFloat(activeIndicators.support_resistance.level);
+        if (!isNaN(lvl)) {
+          overlayPriceLinesRef.current.push(
+            seriesRef.current.createPriceLine({
+              price: lvl,
+              color: "#4fc3f7",
+              lineWidth: 2,
+              lineStyle: LightweightCharts.LineStyle.Solid,
+              title: "S/R"
+            })
+          );
+        }
       }
     }, [activeIndicators, filteredCandles]);
     const toggleIndicator = (key) => {
