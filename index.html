@@ -68,6 +68,20 @@
   .signal-dot{position:absolute;top:10px;left:10px;width:8px;height:8px;border-radius:50%;
     background:var(--green);box-shadow:0 0 8px var(--green);}
 
+  .trend-row{display:flex;gap:6px;margin-top:2px;}
+  .trend-pill,.rec-pill{font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 8px;
+    border-radius:20px;letter-spacing:0.3px;white-space:nowrap;}
+  .trend-pill.trend-alta{background:rgba(52,211,153,0.15);color:var(--green);}
+  .trend-pill.trend-baixa{background:rgba(248,113,113,0.15);color:var(--red);}
+  .rec-pill.rec-comprar{background:rgba(52,211,153,0.15);color:var(--green);}
+  .rec-pill.rec-vender{background:rgba(248,113,113,0.15);color:var(--red);}
+  .rec-pill.rec-esperar{background:rgba(251,191,36,0.15);color:var(--amber);}
+
+  .analyze-bar{padding:10px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));}
+  .btn-analyze{width:100%;padding:12px;border-radius:10px;border:1px solid var(--cyan);
+    background:rgba(79,195,247,0.1);color:var(--cyan);font-weight:700;font-size:13px;cursor:pointer;}
+  .btn-analyze:disabled{opacity:0.6;}
+
   .fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom));right:calc(20px + env(safe-area-inset-right));
     width:52px;height:52px;border-radius:16px;
     background:var(--cyan);color:var(--bg);border:none;font-size:26px;font-weight:700;
@@ -191,6 +205,26 @@
       let sum = 0;
       for (let j = i - period + 1; j <= i; j++) sum += values[j];
       out.push(sum / period);
+    }
+    return out;
+  }
+  function rsi(closes, period = 14) {
+    const out = new Array(closes.length).fill(null);
+    let gains = 0, losses = 0;
+    for (let i = 1; i <= period && i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff >= 0) gains += diff;
+      else losses -= diff;
+    }
+    let avgGain = gains / period, avgLoss = losses / period;
+    out[period] = 100 - 100 / (1 + (avgLoss === 0 ? 100 : avgGain / avgLoss));
+    for (let i = period + 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      const gain = diff > 0 ? diff : 0;
+      const loss = diff < 0 ? -diff : 0;
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+      out[i] = 100 - 100 / (1 + (avgLoss === 0 ? 100 : avgGain / avgLoss));
     }
     return out;
   }
@@ -324,7 +358,22 @@
     };
     return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Adicionar a\xE7\xE3o \xB7 ", market), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Ticker (", market === "BR" ? "ex: PETR4" : "ex: AAPL", ")"), /* @__PURE__ */ React.createElement("input", { value: ticker, onChange: (e) => setTicker(e.target.value), placeholder: market === "BR" ? "PETR4" : "AAPL" })), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Nome (opcional)"), /* @__PURE__ */ React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "Petrobras" })), /* @__PURE__ */ React.createElement("div", { className: "row2" }, /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Quantidade (se tiver posi\xE7\xE3o)"), /* @__PURE__ */ React.createElement("input", { value: qty, onChange: (e) => setQty(e.target.value), type: "number", placeholder: "0" })), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Pre\xE7o m\xE9dio"), /* @__PURE__ */ React.createElement("input", { value: avgPrice, onChange: (e) => setAvgPrice(e.target.value), type: "number", placeholder: "0.00" }))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", disabled: saving, onClick: save }, saving ? "Salvando\u2026" : "Adicionar"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: onClose }, "Cancelar")));
   }
-  function WatchlistView({ market, items, quotes, positions, onOpen, onAdd }) {
+  function analyzeTrend(candles) {
+    if (!candles || candles.length < 25) return null;
+    const closes = candles.map((c) => c.close);
+    const n = closes.length;
+    const sma9 = sma(closes, 9);
+    const sma21 = sma(closes, 21);
+    const rsiArr = rsi(closes, 14);
+    const lastSma9 = sma9[n - 1], lastSma21 = sma21[n - 1], lastRsi = rsiArr[n - 1];
+    if (lastSma9 == null || lastSma21 == null) return null;
+    const trend = lastSma9 >= lastSma21 ? "alta" : "baixa";
+    let recommendation = "esperar";
+    if (trend === "alta" && (lastRsi == null || lastRsi < 70)) recommendation = "comprar";
+    else if (trend === "baixa" && (lastRsi == null || lastRsi > 30)) recommendation = "vender";
+    return { trend, recommendation, rsi: lastRsi };
+  }
+  function WatchlistView({ market, items, quotes, positions, analysis, onOpen, onAdd }) {
     if (items.length === 0) {
       return /* @__PURE__ */ React.createElement("div", { className: "empty" }, "Nenhuma a\xE7\xE3o monitorada em ", market, " ainda.", /* @__PURE__ */ React.createElement("br", null), "Toque no + para adicionar.");
     }
@@ -334,7 +383,9 @@
       const posValue = pos && q ? pos.quantity * q.price : null;
       const posCost = pos ? pos.quantity * pos.avg_price : null;
       const posDiff = posValue != null && posCost != null ? posValue - posCost : null;
-      return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", onClick: () => onOpen(item) }, item.hasSignal && /* @__PURE__ */ React.createElement("div", { className: "signal-dot" }), /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name)), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price" }, q ? fmtCurrency(q.price, market) : "\u2026"), pos ? /* @__PURE__ */ React.createElement("div", { className: `watch-pos ${posDiff >= 0 ? "pos" : "neg"}` }, pos.quantity, " un \xB7 ", fmtCurrency(posValue, market)) : /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, "sem posi\xE7\xE3o")));
+      const a = analysis && analysis[item.id];
+      const recLabel = { comprar: "Comprar", vender: "Vender", esperar: "Esperar" };
+      return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", onClick: () => onOpen(item) }, item.hasSignal && /* @__PURE__ */ React.createElement("div", { className: "signal-dot" }), /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name), a && /* @__PURE__ */ React.createElement("div", { className: "trend-row" }, /* @__PURE__ */ React.createElement("span", { className: `trend-pill trend-${a.trend}` }, a.trend === "alta" ? "\u2191 Alta" : "\u2193 Baixa"), /* @__PURE__ */ React.createElement("span", { className: `rec-pill rec-${a.recommendation}` }, recLabel[a.recommendation]))), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price" }, q ? fmtCurrency(q.price, market) : "\u2026"), pos ? /* @__PURE__ */ React.createElement("div", { className: `watch-pos ${posDiff >= 0 ? "pos" : "neg"}` }, pos.quantity, " un \xB7 ", fmtCurrency(posValue, market)) : /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, "sem posi\xE7\xE3o")));
     }));
   }
   function TickerDetail({ item, market, onBack }) {
@@ -568,6 +619,8 @@
     const [positions, setPositions] = useState({});
     const [selected, setSelected] = useState(null);
     const [showAdd, setShowAdd] = useState(false);
+    const [analysis, setAnalysis] = useState({});
+    const [analyzing, setAnalyzing] = useState(false);
     const loadWatchlist = useCallback(async () => {
       const { data: wl } = await supabase.from("watchlist").select("*").eq("market", market);
       setItems(wl || []);
@@ -592,16 +645,32 @@
     useEffect(() => {
       loadWatchlist();
     }, [loadWatchlist]);
+    const runAnalysis = async () => {
+      if (analyzing || items.length === 0) return;
+      setAnalyzing(true);
+      const results = {};
+      await Promise.all(items.map(async (w) => {
+        try {
+          const data = await fetchHistory(market, w.ticker, "6mo", "1d");
+          const result = analyzeTrend(data.candles || []);
+          if (result) results[w.id] = result;
+        } catch (e) {
+        }
+      }));
+      setAnalysis((prev) => ({ ...prev, ...results }));
+      setAnalyzing(false);
+    };
     if (selected) {
       return /* @__PURE__ */ React.createElement(TickerDetail, { item: selected, market, onBack: () => setSelected(null) });
     }
-    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "topbar" }, /* @__PURE__ */ React.createElement("div", { className: "brand" }, "STOCK", /* @__PURE__ */ React.createElement("span", { className: "dim" }, "\xB7MONITOR"))), /* @__PURE__ */ React.createElement("div", { className: "market-tabs" }, /* @__PURE__ */ React.createElement("button", { className: `market-tab ${market === "BR" ? "active" : ""}`, onClick: () => setMarket("BR") }, "B3 \xB7 BRASIL"), /* @__PURE__ */ React.createElement("button", { className: `market-tab ${market === "US" ? "active" : ""}`, onClick: () => setMarket("US") }, "US \xB7 AM\xC9RICA")), /* @__PURE__ */ React.createElement("div", { className: "content" }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "topbar" }, /* @__PURE__ */ React.createElement("div", { className: "brand" }, "STOCK", /* @__PURE__ */ React.createElement("span", { className: "dim" }, "\xB7MONITOR"))), /* @__PURE__ */ React.createElement("div", { className: "market-tabs" }, /* @__PURE__ */ React.createElement("button", { className: `market-tab ${market === "BR" ? "active" : ""}`, onClick: () => setMarket("BR") }, "B3 \xB7 BRASIL"), /* @__PURE__ */ React.createElement("button", { className: `market-tab ${market === "US" ? "active" : ""}`, onClick: () => setMarket("US") }, "US \xB7 AM\xC9RICA")), items.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "analyze-bar" }, /* @__PURE__ */ React.createElement("button", { className: "btn-analyze", disabled: analyzing, onClick: runAnalysis }, analyzing ? "Analisando\u2026" : "\u{1F4C8} Analisar tend\xEAncias")), /* @__PURE__ */ React.createElement("div", { className: "content" }, /* @__PURE__ */ React.createElement(
       WatchlistView,
       {
         market,
         items,
         quotes,
         positions,
+        analysis,
         onOpen: setSelected
       }
     )), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { key: market + "-" + Date.now(), market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }));
