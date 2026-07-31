@@ -31,8 +31,9 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-    height:100%;overscroll-behavior:none;}
-  #root{min-height:100vh;display:flex;flex-direction:column;}
+    height:100%;overscroll-behavior:none;
+    position:fixed;inset:0;overflow:hidden;width:100%;}
+  #root{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
   input,select,button{font-family:var(--sans);}
   ::-webkit-scrollbar{width:0;height:0;}
 
@@ -49,7 +50,7 @@
     letter-spacing:1px;}
   .market-tab.active{color:var(--bg);background:var(--cyan);}
 
-  .content{flex:1;overflow-y:auto;
+  .content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
     padding:14px calc(16px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));}
 
   .watch-item{display:flex;align-items:center;justify-content:space-between;padding:14px;
@@ -75,10 +76,11 @@
 
   .empty{text-align:center;color:var(--text-dim);margin-top:60px;font-size:13px;line-height:1.6;}
 
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;
+  .modal-overlay{position:fixed;inset:0;height:100vh;height:100dvh;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;
     z-index:50;}
   .modal{background:var(--panel);border-top:1px solid var(--border);border-radius:18px 18px 0 0;
-    width:100%;padding:20px 16px calc(20px + env(safe-area-inset-bottom));max-height:85vh;overflow-y:auto;}
+    width:100%;padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+    max-height:85vh;max-height:85dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .modal h3{margin:0 0 16px;font-size:15px;font-family:var(--mono);color:var(--cyan);}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:6px;letter-spacing:0.3px;}
@@ -557,7 +559,7 @@
         positions,
         onOpen: setSelected
       }
-    )), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }));
+    )), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { key: market + "-" + Date.now(), market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }));
   }
   function BootError({ missing }) {
     return /* @__PURE__ */ React.createElement("div", { style: { padding: 24, fontFamily: "monospace", color: "#f87171" } }, /* @__PURE__ */ React.createElement("h3", null, "Falha ao carregar bibliotecas externas"), /* @__PURE__ */ React.createElement("p", null, "N\xE3o encontrado: ", missing.join(", ")), /* @__PURE__ */ React.createElement("p", { style: { color: "#7c8a9c", fontSize: 13 } }, "Verifique sua conex\xE3o e recarregue a p\xE1gina. Se persistir, algum CDN pode estar bloqueado."));
