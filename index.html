@@ -77,6 +77,13 @@
   .rec-pill.rec-vender{background:rgba(248,113,113,0.15);color:var(--red);}
   .rec-pill.rec-esperar{background:rgba(251,191,36,0.15);color:var(--amber);}
 
+  .opt-btn{padding:3px 9px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--text-dim);font-family:var(--mono);font-size:10px;font-weight:700;cursor:pointer;}
+  .opt-row{display:flex;justify-content:space-between;gap:16px;font-family:var(--mono);font-size:12px;
+    padding:6px 0;border-bottom:1px solid var(--border);}
+  .opt-row.opt-header{color:var(--text-dim);font-size:10px;border-bottom:1px solid var(--border);}
+  .opt-row.opt-atm{color:var(--cyan);font-weight:700;}
+
   .analyze-bar{padding:10px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));}
   .btn-analyze{width:100%;padding:12px;border-radius:10px;border:1px solid var(--cyan);
     background:rgba(79,195,247,0.1);color:var(--cyan);font-weight:700;font-size:13px;cursor:pointer;}
@@ -453,6 +460,15 @@
     if (!res.ok) throw new Error("Falha ao buscar hist\xF3rico");
     return res.json();
   }
+  async function fetchOptions(market, ticker, dateUnix) {
+    const symbol = toYahooSymbol(market, ticker);
+    const dateParam = dateUnix ? `&date=${dateUnix}` : "";
+    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=options${dateParam}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) throw new Error("Falha ao buscar op\xE7\xF5es");
+    return res.json();
+  }
   function fmtCurrency(v, market) {
     if (v == null || isNaN(v)) return "\u2014";
     const symbol = market === "BR" ? "R$" : "US$";
@@ -525,7 +541,7 @@
     else if (trend === "baixa" && (lastRsi == null || lastRsi > 30)) recommendation = "vender";
     return { trend, recommendation, rsi: lastRsi };
   }
-  function WatchlistView({ market, items, quotes, positions, analysis, onOpen, onAdd }) {
+  function WatchlistView({ market, items, quotes, positions, analysis, onOpen, onOptions, onAdd }) {
     if (items.length === 0) {
       return /* @__PURE__ */ React.createElement("div", { className: "empty" }, "Nenhuma a\xE7\xE3o monitorada em ", market, " ainda.", /* @__PURE__ */ React.createElement("br", null), "Toque no + para adicionar.");
     }
@@ -537,7 +553,10 @@
       const posDiff = posValue != null && posCost != null ? posValue - posCost : null;
       const a = analysis && analysis[item.id];
       const recLabel = { comprar: "Comprar", vender: "Vender", esperar: "Esperar" };
-      return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", onClick: () => onOpen(item) }, item.hasSignal && /* @__PURE__ */ React.createElement("div", { className: "signal-dot" }), /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name), a && /* @__PURE__ */ React.createElement("div", { className: "trend-row" }, /* @__PURE__ */ React.createElement("span", { className: `trend-pill trend-${a.trend}` }, a.trend === "alta" ? "\u2191 Alta" : "\u2193 Baixa"), /* @__PURE__ */ React.createElement("span", { className: `rec-pill rec-${a.recommendation}` }, recLabel[a.recommendation]))), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price" }, q ? fmtCurrency(q.price, market) : "\u2026"), pos ? /* @__PURE__ */ React.createElement("div", { className: `watch-pos ${posDiff >= 0 ? "pos" : "neg"}` }, pos.quantity, " un \xB7 ", fmtCurrency(posValue, market)) : /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, "sem posi\xE7\xE3o")));
+      return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", onClick: () => onOpen(item) }, item.hasSignal && /* @__PURE__ */ React.createElement("div", { className: "signal-dot" }), /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name), /* @__PURE__ */ React.createElement("div", { className: "trend-row" }, a && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: `trend-pill trend-${a.trend}` }, a.trend === "alta" ? "\u2191 Alta" : "\u2193 Baixa"), /* @__PURE__ */ React.createElement("span", { className: `rec-pill rec-${a.recommendation}` }, recLabel[a.recommendation])), /* @__PURE__ */ React.createElement("button", { className: "opt-btn", onClick: (e) => {
+        e.stopPropagation();
+        onOptions(item);
+      } }, "Op\xE7\xF5es"))), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price" }, q ? fmtCurrency(q.price, market) : "\u2026"), pos ? /* @__PURE__ */ React.createElement("div", { className: `watch-pos ${posDiff >= 0 ? "pos" : "neg"}` }, pos.quantity, " un \xB7 ", fmtCurrency(posValue, market)) : /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, "sem posi\xE7\xE3o")));
     }));
   }
   function TickerDetail({ item, market, onBack }) {
@@ -894,6 +913,33 @@
       }
     ), /* @__PURE__ */ React.createElement("div", { style: { padding: "16px" } }, /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: () => setShowConfig(true) }, "\u2699 Configurar monitoramento (sinal de entrada)")), showConfig && /* @__PURE__ */ React.createElement(MonitoringConfigModal, { item, onClose: () => setShowConfig(false) }));
   }
+  function OptionsModal({ item, market, onClose }) {
+    var _a;
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [data, setData] = useState(null);
+    useEffect(() => {
+      let cancelled = false;
+      setLoading(true);
+      setError(null);
+      fetchOptions(market, item.ticker).then((d) => {
+        if (!cancelled) setData(d);
+      }).catch((e) => {
+        if (!cancelled) setError(e.message);
+      }).finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [item.ticker, market]);
+    const price = data == null ? void 0 : data.price;
+    const expDate = (_a = data == null ? void 0 : data.expirationDates) == null ? void 0 : _a[0];
+    const calls = ((data == null ? void 0 : data.calls) || []).filter((c) => price != null && c.strike >= price).sort((a, b) => a.strike - b.strike).slice(0, 8);
+    const puts = ((data == null ? void 0 : data.puts) || []).filter((p) => price != null && p.strike <= price).sort((a, b) => b.strike - a.strike).slice(0, 8);
+    const closestStrike = (list) => list.reduce((best, cur) => Math.abs(cur.strike - price) < Math.abs(best.strike - price) ? cur : best, list[0]);
+    return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Op\xE7\xF5es \xB7 ", item.ticker), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", market === "BR" ? "A B3 provavelmente n\xE3o est\xE1 coberta pela fonte de dados gratuita que uso (Yahoo Finance cobre bem o mercado americano, mas n\xE3o op\xE7\xF5es da bolsa brasileira). Pra ver a grade completa, tenta opcoes.net.br ou statusinvest.com.br." : "Tente novamente em instantes."), !loading && !error && data && (calls.length === 0 && puts.length === 0) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada para ", item.ticker, " nessa fonte de dados."), !loading && !error && data && (calls.length > 0 || puts.length > 0) && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 12 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Pr\xF3ximo vencimento:", " ", expDate ? new Date(expDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: "var(--green)", fontWeight: 700, marginBottom: 6 } }, "CALLS \xB7 ATM/OTM"), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", null, "Strike"), /* @__PURE__ */ React.createElement("span", null, "Pr\xEAmio")), calls.map((c) => /* @__PURE__ */ React.createElement("div", { key: c.contractSymbol, className: `opt-row ${c === closestStrike(calls) ? "opt-atm" : ""}` }, /* @__PURE__ */ React.createElement("span", null, fmtCurrency(c.strike, market)), /* @__PURE__ */ React.createElement("span", null, fmtCurrency(c.lastPrice, market))))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: "var(--red)", fontWeight: 700, marginBottom: 6 } }, "PUTS \xB7 ATM/OTM"), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", null, "Strike"), /* @__PURE__ */ React.createElement("span", null, "Pr\xEAmio")), puts.map((p) => /* @__PURE__ */ React.createElement("div", { key: p.contractSymbol, className: `opt-row ${p === closestStrike(puts) ? "opt-atm" : ""}` }, /* @__PURE__ */ React.createElement("span", null, fmtCurrency(p.strike, market)), /* @__PURE__ */ React.createElement("span", null, fmtCurrency(p.lastPrice, market))))))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
+  }
   function IndicatorCategoryModal({ category, indicators, activeIndicators, onToggle, onParamChange, onClose }) {
     return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, category), indicators.map((ind) => {
       const active = !!activeIndicators[ind.key];
@@ -967,6 +1013,7 @@
     const [showAdd, setShowAdd] = useState(false);
     const [analysis, setAnalysis] = useState({});
     const [analyzing, setAnalyzing] = useState(false);
+    const [optionsItem, setOptionsItem] = useState(null);
     const loadWatchlist = useCallback(async () => {
       const { data: wl } = await supabase.from("watchlist").select("*").eq("market", market);
       setItems(wl || []);
@@ -1017,9 +1064,10 @@
         quotes,
         positions,
         analysis,
-        onOpen: setSelected
+        onOpen: setSelected,
+        onOptions: setOptionsItem
       }
-    )), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { key: market + "-" + Date.now(), market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }));
+    )), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { key: market + "-" + Date.now(), market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }), optionsItem && /* @__PURE__ */ React.createElement(OptionsModal, { item: optionsItem, market, onClose: () => setOptionsItem(null) }));
   }
   function BootError({ missing }) {
     return /* @__PURE__ */ React.createElement("div", { style: { padding: 24, fontFamily: "monospace", color: "#f87171" } }, /* @__PURE__ */ React.createElement("h3", null, "Falha ao carregar bibliotecas externas"), /* @__PURE__ */ React.createElement("p", null, "N\xE3o encontrado: ", missing.join(", ")), /* @__PURE__ */ React.createElement("p", { style: { color: "#7c8a9c", fontSize: 13 } }, "Verifique sua conex\xE3o e recarregue a p\xE1gina. Se persistir, algum CDN pode estar bloqueado."));

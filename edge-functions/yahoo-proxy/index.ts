@@ -66,6 +66,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (type === 'options') {
+      const date = url.searchParams.get('date'); // unix seconds, opcional (padrão = próximo vencimento)
+      const yUrl = `https://query1.finance.yahoo.com/v7/finance/options/${symbol}` + (date ? `?date=${date}` : '');
+      const res = await fetch(yUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const json = await res.json();
+      const result = json?.optionChain?.result?.[0];
+      if (!result) throw new Error('Sem dados de opções para este ativo');
+      const body = {
+        price: result.quote?.regularMarketPrice ?? null,
+        expirationDates: result.expirationDates || [],
+        calls: result.options?.[0]?.calls || [],
+        puts: result.options?.[0]?.puts || [],
+      };
+      return new Response(JSON.stringify(body), {
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'type inválido' }), {
       status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
