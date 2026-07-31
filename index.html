@@ -144,7 +144,7 @@
   const { useState, useEffect, useRef, useMemo, useCallback } = React;
   const SUPABASE_URL = "https://vruqgpvufdvlevwhctdp.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_cF9AoW_UEbNtvHwUKdhYbw_RWVCoLer";
-  const QUOTE_PROXY_URL = SUPABASE_URL + "/functions/v1/yahoo-proxy";
+  const QUOTE_PROXY_URL = SUPABASE_URL + "/functions/v1/smart-task";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   function sma(values, period) {
     const out = [];
@@ -225,13 +225,17 @@
   }
   async function fetchQuote(market, ticker) {
     const symbol = toYahooSymbol(market, ticker);
-    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=quote`);
+    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=quote`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
     if (!res.ok) throw new Error("Falha ao buscar cota\xE7\xE3o");
     return res.json();
   }
   async function fetchHistory(market, ticker, range = "1y", interval = "1d") {
     const symbol = toYahooSymbol(market, ticker);
-    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=history&range=${range}&interval=${interval}`);
+    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=history&range=${range}&interval=${interval}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
     if (!res.ok) throw new Error("Falha ao buscar hist\xF3rico");
     return res.json();
   }
