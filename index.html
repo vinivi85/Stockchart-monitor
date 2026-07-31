@@ -134,7 +134,15 @@
     cursor:pointer;}
   .period-btn.active{background:var(--cyan);color:var(--bg);border-color:var(--cyan);}
 
+  .chart-wrap{position:relative;}
   #chart-container{width:100%;height:380px;}
+  .chart-legend{position:absolute;top:10px;left:10px;z-index:5;
+    background:rgba(16,21,29,0.92);border:1px solid var(--border);border-radius:10px;
+    padding:8px 12px;font-family:var(--mono);pointer-events:none;}
+  .chart-legend-date{font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:0.3px;}
+  .chart-legend-row{display:flex;gap:12px;justify-content:space-between;font-size:12px;}
+  .chart-legend-row span{color:var(--text-dim);}
+  .chart-legend-row b{color:var(--text);font-weight:700;}
 
   .indicator-panel{padding:10px calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left));
     border-bottom:1px solid var(--border);}
@@ -450,6 +458,23 @@
     const symbol = market === "BR" ? "R$" : "US$";
     return `${symbol} ${v.toFixed(2)}`;
   }
+  function fmtCandleTime(unixSeconds) {
+    const d = new Date(unixSeconds * 1e3);
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const year = d.getUTCFullYear();
+    const hh = String(d.getUTCHours()).padStart(2, "0");
+    const mm = String(d.getUTCMinutes()).padStart(2, "0");
+    const hasTime = hh !== "00" || mm !== "00";
+    return hasTime ? `${day}/${month}/${year} ${hh}:${mm}` : `${day}/${month}/${year}`;
+  }
+  function fmtVolume(v) {
+    if (v == null || isNaN(v)) return "\u2014";
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
+    return String(v);
+  }
   function AddTickerModal({ market, onClose, onAdded }) {
     const [ticker, setTicker] = useState("");
     const [name, setName] = useState("");
@@ -526,6 +551,8 @@
     const [showConfig, setShowConfig] = useState(false);
     const [openCategory, setOpenCategory] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [clickedCandle, setClickedCandle] = useState(null);
+    const filteredCandlesRef = useRef([]);
     useEffect(() => {
       let cancelled = false;
       setLoading(true);
@@ -560,6 +587,14 @@
       });
       chartApiRef.current = chart;
       seriesRef.current = series;
+      chart.subscribeClick((param) => {
+        if (!param || !param.time) {
+          setClickedCandle(null);
+          return;
+        }
+        const candle = filteredCandlesRef.current.find((c) => c.time === param.time);
+        setClickedCandle(candle || null);
+      });
       const resize = () => chart.applyOptions({ width: chartRef.current.clientWidth });
       window.addEventListener("resize", resize);
       return () => {
@@ -577,6 +612,8 @@
       if (!seriesRef.current || filteredCandles.length === 0) return;
       seriesRef.current.setData(filteredCandles);
       chartApiRef.current.timeScale().fitContent();
+      filteredCandlesRef.current = filteredCandles;
+      setClickedCandle(null);
     }, [filteredCandles]);
     const overlaySeriesRef = useRef([]);
     const overlayPriceLinesRef = useRef([]);
@@ -833,7 +870,7 @@
         onClick: () => setPeriod(p.key)
       },
       p.key
-    ))), /* @__PURE__ */ React.createElement("div", { id: "chart-container", ref: chartRef }), /* @__PURE__ */ React.createElement("div", { className: "category-bar" }, Object.entries(grouped).map(([category, inds]) => {
+    ))), /* @__PURE__ */ React.createElement("div", { className: "chart-wrap" }, /* @__PURE__ */ React.createElement("div", { id: "chart-container", ref: chartRef }), clickedCandle && /* @__PURE__ */ React.createElement("div", { className: "chart-legend" }, /* @__PURE__ */ React.createElement("div", { className: "chart-legend-date" }, fmtCandleTime(clickedCandle.time)), /* @__PURE__ */ React.createElement("div", { className: "chart-legend-row" }, /* @__PURE__ */ React.createElement("span", null, "Abertura"), /* @__PURE__ */ React.createElement("b", null, fmtCurrency(clickedCandle.open, market))), /* @__PURE__ */ React.createElement("div", { className: "chart-legend-row" }, /* @__PURE__ */ React.createElement("span", null, "Fechamento"), /* @__PURE__ */ React.createElement("b", null, fmtCurrency(clickedCandle.close, market))), /* @__PURE__ */ React.createElement("div", { className: "chart-legend-row" }, /* @__PURE__ */ React.createElement("span", null, "Volume"), /* @__PURE__ */ React.createElement("b", null, fmtVolume(clickedCandle.volume))))), /* @__PURE__ */ React.createElement("div", { className: "category-bar" }, Object.entries(grouped).map(([category, inds]) => {
       const activeCount = inds.filter((ind) => activeIndicators[ind.key]).length;
       return /* @__PURE__ */ React.createElement(
         "button",
