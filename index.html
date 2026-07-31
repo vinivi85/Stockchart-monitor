@@ -245,6 +245,16 @@
     }
     return { mid, upper, lower };
   }
+  function obv(candles) {
+    const out = [0];
+    for (let i = 1; i < candles.length; i++) {
+      const prev = out[i - 1];
+      if (candles[i].close > candles[i - 1].close) out.push(prev + candles[i].volume);
+      else if (candles[i].close < candles[i - 1].close) out.push(prev - candles[i].volume);
+      else out.push(prev);
+    }
+    return out;
+  }
   function hilo(candles, period = 3) {
     const highs = candles.map((c) => c.high);
     const lows = candles.map((c) => c.low);
@@ -459,10 +469,27 @@
       const closes = filteredCandles.map((c) => c.close);
       if (activeIndicators.hilo) {
         const hiloPeriod = activeIndicators.hilo.period || 3;
-        const { line } = hilo(filteredCandles, hiloPeriod);
-        const s = chartApiRef.current.addLineSeries({ color: "#4fc3f7", lineWidth: 2 });
-        s.setData(filteredCandles.map((c, i) => ({ time: c.time, value: line[i] })).filter((d) => d.value != null));
-        overlaySeriesRef.current.push(s);
+        const { line, trend } = hilo(filteredCandles, hiloPeriod);
+        let i = 0;
+        while (i < filteredCandles.length) {
+          if (line[i] == null) {
+            i++;
+            continue;
+          }
+          const currentTrend = trend[i];
+          const start = i > 0 && line[i - 1] != null ? i - 1 : i;
+          let j = i;
+          while (j < filteredCandles.length && trend[j] === currentTrend && line[j] != null) j++;
+          const points = [];
+          for (let k = start; k < j; k++) {
+            if (line[k] != null) points.push({ time: filteredCandles[k].time, value: line[k] });
+          }
+          const color = currentTrend === "up" ? "#34d399" : "#f87171";
+          const s = chartApiRef.current.addLineSeries({ color, lineWidth: 2 });
+          s.setData(points);
+          overlaySeriesRef.current.push(s);
+          i = j;
+        }
       }
       if (activeIndicators.sma_cross) {
         const { fast, slow } = activeIndicators.sma_cross;
@@ -481,6 +508,36 @@
         s1.setData(filteredCandles.map((c, i) => ({ time: c.time, value: upper[i] })).filter((d) => d.value != null));
         s2.setData(filteredCandles.map((c, i) => ({ time: c.time, value: lower[i] })).filter((d) => d.value != null));
         overlaySeriesRef.current.push(s1, s2);
+      }
+      if (activeIndicators.volume_relative) {
+        const p = activeIndicators.volume_relative.period || 20;
+        const volSeries = chartApiRef.current.addHistogramSeries({
+          priceFormat: { type: "volume" },
+          priceScaleId: "volume"
+        });
+        chartApiRef.current.priceScale("volume").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+        volSeries.setData(filteredCandles.map((c) => ({
+          time: c.time,
+          value: c.volume,
+          color: c.close >= c.open ? "rgba(52,211,153,0.5)" : "rgba(248,113,113,0.5)"
+        })));
+        overlaySeriesRef.current.push(volSeries);
+        const vols = filteredCandles.map((c) => c.volume);
+        const avgVol = sma(vols, p);
+        const avgSeries = chartApiRef.current.addLineSeries({
+          color: "#fbbf24",
+          lineWidth: 1,
+          priceScaleId: "volume"
+        });
+        avgSeries.setData(filteredCandles.map((c, i) => ({ time: c.time, value: avgVol[i] })).filter((d) => d.value != null));
+        overlaySeriesRef.current.push(avgSeries);
+      }
+      if (activeIndicators.obv) {
+        const obvVals = obv(filteredCandles);
+        const s = chartApiRef.current.addLineSeries({ color: "#a78bfa", lineWidth: 1, priceScaleId: "obv" });
+        chartApiRef.current.priceScale("obv").applyOptions({ scaleMargins: { top: 0.1, bottom: 0.5 } });
+        s.setData(filteredCandles.map((c, i) => ({ time: c.time, value: obvVals[i] })));
+        overlaySeriesRef.current.push(s);
       }
     }, [activeIndicators, filteredCandles]);
     const toggleIndicator = (key) => {
