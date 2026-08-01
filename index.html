@@ -82,7 +82,14 @@
   .opt-row{display:flex;justify-content:space-between;gap:16px;font-family:var(--mono);font-size:12px;
     padding:6px 0;border-bottom:1px solid var(--border);}
   .opt-row.opt-header{color:var(--text-dim);font-size:10px;border-bottom:1px solid var(--border);}
-  .opt-row.opt-atm{color:var(--cyan);font-weight:700;}
+  .opt-atm-tag{font-size:9px;font-weight:700;color:var(--cyan);background:rgba(79,195,247,0.15);
+    padding:2px 6px;border-radius:10px;}
+
+  .opt-filters{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+  .opt-filter-group{display:flex;gap:6px;flex-wrap:wrap;}
+  .opt-chip{padding:6px 11px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--text-dim);font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;}
+  .opt-chip.active{background:rgba(79,195,247,0.15);border-color:var(--cyan);color:var(--cyan);}
 
   .analyze-bar{padding:10px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));}
   .btn-analyze{width:100%;padding:12px;border-radius:10px;border:1px solid var(--cyan);
@@ -913,17 +920,38 @@
       }
     ), /* @__PURE__ */ React.createElement("div", { style: { padding: "16px" } }, /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: () => setShowConfig(true) }, "\u2699 Configurar monitoramento (sinal de entrada)")), showConfig && /* @__PURE__ */ React.createElement(MonitoringConfigModal, { item, onClose: () => setShowConfig(false) }));
   }
+  function classifyOptions(list, type, price) {
+    if (!list || list.length === 0 || price == null) return [];
+    const relevant = list.filter((o) => type === "call" ? o.strike >= price : o.strike <= price);
+    if (relevant.length === 0) return [];
+    const atm = relevant.reduce((best, cur) => Math.abs(cur.strike - price) < Math.abs(best.strike - price) ? cur : best, relevant[0]);
+    return relevant.map((o) => ({
+      ...o,
+      type,
+      moneyness: o.contractSymbol === atm.contractSymbol ? "atm" : "otm"
+    }));
+  }
   function OptionsModal({ item, market, onClose }) {
     var _a;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
+    const [expIndex, setExpIndex] = useState(0);
+    const [typeFilter, setTypeFilter] = useState("ambos");
+    const [moneynessFilter, setMoneynessFilter] = useState("ambos");
     useEffect(() => {
       let cancelled = false;
       setLoading(true);
       setError(null);
-      fetchOptions(market, item.ticker).then((d) => {
-        if (!cancelled) setData(d);
+      fetchOptions(market, item.ticker).then(async (first) => {
+        var _a2;
+        if (cancelled) return;
+        if (expIndex === 0 || !((_a2 = first.expirationDates) == null ? void 0 : _a2[expIndex])) {
+          setData(first);
+          return;
+        }
+        const second = await fetchOptions(market, item.ticker, first.expirationDates[expIndex]);
+        if (!cancelled) setData({ ...second, expirationDates: first.expirationDates });
       }).catch((e) => {
         if (!cancelled) setError(e.message);
       }).finally(() => {
@@ -932,13 +960,46 @@
       return () => {
         cancelled = true;
       };
-    }, [item.ticker, market]);
+    }, [item.ticker, market, expIndex]);
     const price = data == null ? void 0 : data.price;
-    const expDate = (_a = data == null ? void 0 : data.expirationDates) == null ? void 0 : _a[0];
-    const calls = ((data == null ? void 0 : data.calls) || []).filter((c) => price != null && c.strike >= price).sort((a, b) => a.strike - b.strike).slice(0, 8);
-    const puts = ((data == null ? void 0 : data.puts) || []).filter((p) => price != null && p.strike <= price).sort((a, b) => b.strike - a.strike).slice(0, 8);
-    const closestStrike = (list) => list.reduce((best, cur) => Math.abs(cur.strike - price) < Math.abs(best.strike - price) ? cur : best, list[0]);
-    return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Op\xE7\xF5es \xB7 ", item.ticker), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", market === "BR" ? "A B3 provavelmente n\xE3o est\xE1 coberta pela fonte de dados gratuita que uso (Yahoo Finance cobre bem o mercado americano, mas n\xE3o op\xE7\xF5es da bolsa brasileira). Pra ver a grade completa, tenta opcoes.net.br ou statusinvest.com.br." : "Tente novamente em instantes."), !loading && !error && data && (calls.length === 0 && puts.length === 0) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada para ", item.ticker, " nessa fonte de dados."), !loading && !error && data && (calls.length > 0 || puts.length > 0) && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 12 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Pr\xF3ximo vencimento:", " ", expDate ? new Date(expDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: "var(--green)", fontWeight: 700, marginBottom: 6 } }, "CALLS \xB7 ATM/OTM"), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", null, "Strike"), /* @__PURE__ */ React.createElement("span", null, "Pr\xEAmio")), calls.map((c) => /* @__PURE__ */ React.createElement("div", { key: c.contractSymbol, className: `opt-row ${c === closestStrike(calls) ? "opt-atm" : ""}` }, /* @__PURE__ */ React.createElement("span", null, fmtCurrency(c.strike, market)), /* @__PURE__ */ React.createElement("span", null, fmtCurrency(c.lastPrice, market))))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: "var(--red)", fontWeight: 700, marginBottom: 6 } }, "PUTS \xB7 ATM/OTM"), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", null, "Strike"), /* @__PURE__ */ React.createElement("span", null, "Pr\xEAmio")), puts.map((p) => /* @__PURE__ */ React.createElement("div", { key: p.contractSymbol, className: `opt-row ${p === closestStrike(puts) ? "opt-atm" : ""}` }, /* @__PURE__ */ React.createElement("span", null, fmtCurrency(p.strike, market)), /* @__PURE__ */ React.createElement("span", null, fmtCurrency(p.lastPrice, market))))))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
+    const expDates = (data == null ? void 0 : data.expirationDates) || [];
+    const currentExpDate = expIndex === 0 ? expDates[0] : (_a = expDates[expIndex]) != null ? _a : expDates[0];
+    const rows = useMemo(() => {
+      const calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
+      const puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
+      let combined = [...calls, ...puts];
+      if (typeFilter !== "ambos") combined = combined.filter((o) => o.type === typeFilter);
+      if (moneynessFilter !== "ambos") combined = combined.filter((o) => o.moneyness === moneynessFilter);
+      return combined.sort((a, b) => {
+        if (a.type !== b.type) return a.type === "call" ? -1 : 1;
+        return Math.abs(a.strike - price) - Math.abs(b.strike - price);
+      });
+    }, [data, price, typeFilter, moneynessFilter]);
+    return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Op\xE7\xF5es \xB7 ", item.ticker), /* @__PURE__ */ React.createElement("div", { className: "opt-filters" }, /* @__PURE__ */ React.createElement("div", { className: "opt-filter-group" }, [{ k: 0, l: "Mais pr\xF3ximo" }, { k: 1, l: "Seguinte" }].map((v) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: v.k,
+        className: `opt-chip ${expIndex === v.k ? "active" : ""}`,
+        onClick: () => setExpIndex(v.k)
+      },
+      v.l
+    ))), /* @__PURE__ */ React.createElement("div", { className: "opt-filter-group" }, [{ k: "ambos", l: "Call+Put" }, { k: "call", l: "Call" }, { k: "put", l: "Put" }].map((v) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: v.k,
+        className: `opt-chip ${typeFilter === v.k ? "active" : ""}`,
+        onClick: () => setTypeFilter(v.k)
+      },
+      v.l
+    ))), /* @__PURE__ */ React.createElement("div", { className: "opt-filter-group" }, [{ k: "ambos", l: "ATM+OTM" }, { k: "atm", l: "ATM" }, { k: "otm", l: "OTM" }].map((v) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: v.k,
+        className: `opt-chip ${moneynessFilter === v.k ? "active" : ""}`,
+        onClick: () => setMoneynessFilter(v.k)
+      },
+      v.l
+    )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", market === "BR" ? "A B3 provavelmente n\xE3o est\xE1 coberta pela fonte de dados gratuita que uso (Yahoo Finance cobre bem o mercado americano, mas n\xE3o op\xE7\xF5es da bolsa brasileira). Pra ver a grade completa, tenta opcoes.net.br ou statusinvest.com.br." : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 10 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 44px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } })), rows.map((o) => /* @__PURE__ */ React.createElement("div", { key: o.contractSymbol, className: "opt-row" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 44px", color: o.type === "call" ? "var(--green)" : "var(--red)", fontWeight: 700 } }, o.type === "call" ? "CALL" : "PUT"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.strike, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.lastPrice, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px", textAlign: "right" } }, o.moneyness === "atm" && /* @__PURE__ */ React.createElement("span", { className: "opt-atm-tag" }, "ATM"))))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
   }
   function IndicatorCategoryModal({ category, indicators, activeIndicators, onToggle, onParamChange, onClose }) {
     return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, category), indicators.map((ind) => {
