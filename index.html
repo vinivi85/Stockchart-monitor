@@ -90,6 +90,8 @@
   .opt-chip{padding:6px 11px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);
     color:var(--text-dim);font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;}
   .opt-chip.active{background:rgba(79,195,247,0.15);border-color:var(--cyan);color:var(--cyan);}
+  .opt-row.opt-best{background:rgba(251,191,36,0.08);margin:0 -12px;padding:6px 12px;
+    border-radius:6px;border-bottom:1px solid rgba(251,191,36,0.25);}
 
   .analyze-bar{padding:10px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));}
   .btn-analyze{width:100%;padding:12px;border-radius:10px;border:1px solid var(--cyan);
@@ -920,16 +922,43 @@
       }
     ), /* @__PURE__ */ React.createElement("div", { style: { padding: "16px" } }, /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: () => setShowConfig(true) }, "\u2699 Configurar monitoramento (sinal de entrada)")), showConfig && /* @__PURE__ */ React.createElement(MonitoringConfigModal, { item, onClose: () => setShowConfig(false) }));
   }
+  function normalCDF(x) {
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989423 * Math.exp(-x * x / 2);
+    let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return x >= 0 ? 1 - p : p;
+  }
+  function normalPDF(x) {
+    return Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
+  }
+  function blackScholesGreeks(type, S, K, T, sigma, r = 0.05) {
+    if (!S || !K || !T || !sigma || T <= 0 || sigma <= 0) return { delta: null, theta: null };
+    const sqrtT = Math.sqrt(T);
+    const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * T) / (sigma * sqrtT);
+    const d2 = d1 - sigma * sqrtT;
+    const delta = type === "call" ? normalCDF(d1) : normalCDF(d1) - 1;
+    const thetaAnnual = type === "call" ? -S * normalPDF(d1) * sigma / (2 * sqrtT) - r * K * Math.exp(-r * T) * normalCDF(d2) : -S * normalPDF(d1) * sigma / (2 * sqrtT) + r * K * Math.exp(-r * T) * normalCDF(-d2);
+    return { delta, theta: thetaAnnual / 365 };
+  }
   function classifyOptions(list, type, price) {
     if (!list || list.length === 0 || price == null) return [];
     const relevant = list.filter((o) => type === "call" ? o.strike >= price : o.strike <= price);
     if (relevant.length === 0) return [];
     const atm = relevant.reduce((best, cur) => Math.abs(cur.strike - price) < Math.abs(best.strike - price) ? cur : best, relevant[0]);
-    return relevant.map((o) => ({
-      ...o,
-      type,
-      moneyness: o.contractSymbol === atm.contractSymbol ? "atm" : "otm"
-    }));
+    const nowSec = Date.now() / 1e3;
+    return relevant.map((o) => {
+      const T = o.expiration ? (o.expiration - nowSec) / (365 * 86400) : null;
+      const { delta, theta } = blackScholesGreeks(type, price, o.strike, T, o.impliedVolatility);
+      const score = delta != null && theta != null && Math.abs(theta) > 1e-4 ? Math.abs(delta) / Math.abs(theta) : null;
+      return {
+        ...o,
+        type,
+        delta,
+        theta,
+        score,
+        moneyness: o.contractSymbol === atm.contractSymbol ? "atm" : "otm"
+      };
+    });
   }
   function OptionsModal({ item, market, onClose }) {
     var _a;
@@ -964,6 +993,13 @@
     const price = data == null ? void 0 : data.price;
     const expDates = (data == null ? void 0 : data.expirationDates) || [];
     const currentExpDate = expIndex === 0 ? expDates[0] : (_a = expDates[expIndex]) != null ? _a : expDates[0];
+    const bestByType = useMemo(() => {
+      var _a2, _b;
+      const calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
+      const puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
+      const bestOf = (list) => list.filter((o) => o.score != null).reduce((best, cur) => !best || cur.score > best.score ? cur : best, null);
+      return { call: (_a2 = bestOf(calls)) == null ? void 0 : _a2.contractSymbol, put: (_b = bestOf(puts)) == null ? void 0 : _b.contractSymbol };
+    }, [data, price]);
     const rows = useMemo(() => {
       const calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
       const puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
@@ -999,7 +1035,10 @@
         onClick: () => setMoneynessFilter(v.k)
       },
       v.l
-    )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", market === "BR" ? "A B3 provavelmente n\xE3o est\xE1 coberta pela fonte de dados gratuita que uso (Yahoo Finance cobre bem o mercado americano, mas n\xE3o op\xE7\xF5es da bolsa brasileira). Pra ver a grade completa, tenta opcoes.net.br ou statusinvest.com.br." : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 10 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 44px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } })), rows.map((o) => /* @__PURE__ */ React.createElement("div", { key: o.contractSymbol, className: "opt-row" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 44px", color: o.type === "call" ? "var(--green)" : "var(--red)", fontWeight: 700 } }, o.type === "call" ? "CALL" : "PUT"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.strike, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.lastPrice, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px", textAlign: "right" } }, o.moneyness === "atm" && /* @__PURE__ */ React.createElement("span", { className: "opt-atm-tag" }, "ATM"))))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
+    )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", market === "BR" ? "A B3 provavelmente n\xE3o est\xE1 coberta pela fonte de dados gratuita que uso (Yahoo Finance cobre bem o mercado americano, mas n\xE3o op\xE7\xF5es da bolsa brasileira). Pra ver a grade completa, tenta opcoes.net.br ou statusinvest.com.br." : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 4 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 } }, "\u2B50 = melhor retorno direcional por decaimento di\xE1rio (|\u0394| / |\u0398|), calculado via Black-Scholes a partir da volatilidade impl\xEDcita \u2014 n\xE3o \xE9 garantia de resultado."), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0394"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0398/dia"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px" } })), rows.map((o) => {
+      const isBest = bestByType[o.type] === o.contractSymbol;
+      return /* @__PURE__ */ React.createElement("div", { key: o.contractSymbol, className: `opt-row ${isBest ? "opt-best" : ""}` }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px", color: o.type === "call" ? "var(--green)" : "var(--red)", fontWeight: 700 } }, o.type === "call" ? "CALL" : "PUT"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.strike, market), o.moneyness === "atm" && /* @__PURE__ */ React.createElement("span", { className: "opt-atm-tag", style: { marginLeft: 6 } }, "ATM")), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.lastPrice, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.delta != null ? o.delta.toFixed(2) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.theta != null ? o.theta.toFixed(3) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px", textAlign: "right" } }, isBest && "\u2B50"));
+    })), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
   }
   function IndicatorCategoryModal({ category, indicators, activeIndicators, onToggle, onParamChange, onClose }) {
     return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, category), indicators.map((ind) => {
