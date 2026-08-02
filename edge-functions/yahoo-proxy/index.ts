@@ -84,6 +84,66 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (type === 'br_options') {
+      // Fonte: portal público e gratuito da OpLab (sem login/token).
+      // Não é API oficial — extraímos direto do HTML. Se o layout deles mudar,
+      // o parser pode quebrar; nesse caso devolvemos uma amostra do HTML pra ajuste.
+      const pageUrl = `https://opcoes.oplab.com.br/mercado/acoes/opcoes/${symbol}`;
+      const res = await fetch(pageUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const html = await res.text();
+
+      const toNum = (s) => {
+        if (!s) return null;
+        const n = parseFloat(String(s).replace(/\./g, '').replace(',', '.'));
+        return isNaN(n) ? null : n;
+      };
+
+      // preço do ativo: primeiro "R$ X,XX" que aparece após o símbolo no HTML
+      let price = null;
+      const priceMatch = html.match(new RegExp(symbol + '[\\s\\S]{0,200}?R\\$\\s*([\\d.,]+)'));
+      if (priceMatch) price = toNum(priceMatch[1]);
+
+      // tenta extrair linhas de tabela <tr>/<td> (estrutura mais comum p/ grids de dados)
+      const rows = [];
+      const trMatches = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+      for (const tr of trMatches) {
+        const cells = (tr.match(/<td[^>]*>[\s\S]*?<\/td>/g) || [])
+          .map(td => td.replace(/<[^>]+>/g, '').trim());
+        if (cells.length < 13) continue;
+        const [code, tipo, strikeRaw, volRaw, moneyness, diasRaw, teoricoRaw, deltaRaw,
+          lastRaw, varRaw, midRaw, bidRaw, askRaw] = cells;
+        if (!code || !/CALL|PUT/i.test(tipo || '')) continue;
+        const diasMatch = (diasRaw || '').match(/(\d+)/);
+        rows.push({
+          contractSymbol: code,
+          type: /CALL/i.test(tipo) ? 'call' : 'put',
+          strike: toNum(strikeRaw),
+          impliedVolatility: toNum(volRaw) != null ? toNum(volRaw) / 100 : null,
+          moneyness: (moneyness || '').toUpperCase(),
+          dias: diasMatch ? parseInt(diasMatch[1]) : null,
+          delta: parseFloat((deltaRaw || '').replace(',', '.')),
+          lastPrice: toNum(lastRaw),
+          bid: toNum(bidRaw),
+          ask: toNum(askRaw),
+        });
+      }
+
+      if (rows.length === 0) {
+        // modo diagnóstico: devolve um pedaço do HTML perto da grade pra gente ajustar o parser
+        const anchor = html.indexOf('Grade de op');
+        const sample = anchor >= 0 ? html.slice(anchor, anchor + 3000) : html.slice(0, 3000);
+        return new Response(JSON.stringify({
+          error: 'parse_failed',
+          message: 'Não consegui extrair a grade de opções — o layout da página pode não usar <table>/<tr>/<td>.',
+          htmlSample: sample,
+        }), { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+      }
+
+      return new Response(JSON.stringify({ price, options: rows }), {
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'type inválido' }), {
       status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });

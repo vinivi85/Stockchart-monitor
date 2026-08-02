@@ -478,6 +478,13 @@
     if (!res.ok) throw new Error("Falha ao buscar op\xE7\xF5es");
     return res.json();
   }
+  async function fetchBrOptions(ticker) {
+    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${ticker}&type=br_options`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) throw new Error("Falha ao buscar op\xE7\xF5es");
+    return res.json();
+  }
   function fmtCurrency(v, market) {
     if (v == null || isNaN(v)) return "\u2014";
     const symbol = market === "BR" ? "R$" : "US$";
@@ -960,8 +967,29 @@
       };
     });
   }
+  function classifyBrOptions(options, price) {
+    if (!options || options.length === 0 || price == null) return [];
+    return options.filter((o) => o.moneyness === "OTM" || o.moneyness === "ATM").map((o) => {
+      const T = o.dias ? o.dias / 252 : null;
+      const { theta } = blackScholesGreeks(o.type, price, o.strike, T, o.impliedVolatility);
+      const delta = o.delta;
+      const score = delta != null && theta != null && Math.abs(theta) > 1e-4 ? Math.abs(delta) / Math.abs(theta) : null;
+      return {
+        contractSymbol: o.contractSymbol,
+        type: o.type,
+        strike: o.strike,
+        lastPrice: o.lastPrice,
+        delta,
+        theta,
+        dias: o.dias,
+        moneyness: o.moneyness.toLowerCase(),
+        score
+      };
+    });
+  }
   function OptionsModal({ item, market, onClose }) {
-    var _a;
+    var _a, _b;
+    const isBr = market === "BR";
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
@@ -972,6 +1000,23 @@
       let cancelled = false;
       setLoading(true);
       setError(null);
+      if (isBr) {
+        fetchBrOptions(item.ticker).then((d) => {
+          if (cancelled) return;
+          if (d.error === "parse_failed") {
+            setError(d.message || "N\xE3o consegui ler os dados de op\xE7\xF5es.");
+            return;
+          }
+          setData(d);
+        }).catch((e) => {
+          if (!cancelled) setError(e.message);
+        }).finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+        return () => {
+          cancelled = true;
+        };
+      }
       fetchOptions(market, item.ticker).then(async (first) => {
         var _a2;
         if (cancelled) return;
@@ -989,28 +1034,46 @@
       return () => {
         cancelled = true;
       };
-    }, [item.ticker, market, expIndex]);
+    }, [item.ticker, market, expIndex, isBr]);
     const price = data == null ? void 0 : data.price;
+    const brDiasOptions = useMemo(() => {
+      if (!isBr || !(data == null ? void 0 : data.options)) return [];
+      const set = [...new Set(data.options.map((o) => o.dias).filter((d) => d != null))];
+      return set.sort((a, b) => a - b);
+    }, [isBr, data]);
+    const selectedDias = (_a = brDiasOptions[expIndex]) != null ? _a : brDiasOptions[0];
     const expDates = (data == null ? void 0 : data.expirationDates) || [];
-    const currentExpDate = expIndex === 0 ? expDates[0] : (_a = expDates[expIndex]) != null ? _a : expDates[0];
+    const currentExpDate = expIndex === 0 ? expDates[0] : (_b = expDates[expIndex]) != null ? _b : expDates[0];
     const bestByType = useMemo(() => {
-      var _a2, _b;
-      const calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
-      const puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
+      var _a2, _b2;
+      let calls, puts;
+      if (isBr) {
+        const all = classifyBrOptions(data == null ? void 0 : data.options, price).filter((o) => o.dias === selectedDias);
+        calls = all.filter((o) => o.type === "call");
+        puts = all.filter((o) => o.type === "put");
+      } else {
+        calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
+        puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
+      }
       const bestOf = (list) => list.filter((o) => o.score != null).reduce((best, cur) => !best || cur.score > best.score ? cur : best, null);
-      return { call: (_a2 = bestOf(calls)) == null ? void 0 : _a2.contractSymbol, put: (_b = bestOf(puts)) == null ? void 0 : _b.contractSymbol };
-    }, [data, price]);
+      return { call: (_a2 = bestOf(calls)) == null ? void 0 : _a2.contractSymbol, put: (_b2 = bestOf(puts)) == null ? void 0 : _b2.contractSymbol };
+    }, [data, price, isBr, selectedDias]);
     const rows = useMemo(() => {
-      const calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
-      const puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
-      let combined = [...calls, ...puts];
+      let combined;
+      if (isBr) {
+        combined = classifyBrOptions(data == null ? void 0 : data.options, price).filter((o) => o.dias === selectedDias);
+      } else {
+        const calls = classifyOptions(data == null ? void 0 : data.calls, "call", price);
+        const puts = classifyOptions(data == null ? void 0 : data.puts, "put", price);
+        combined = [...calls, ...puts];
+      }
       if (typeFilter !== "ambos") combined = combined.filter((o) => o.type === typeFilter);
       if (moneynessFilter !== "ambos") combined = combined.filter((o) => o.moneyness === moneynessFilter);
       return combined.sort((a, b) => {
         if (a.type !== b.type) return a.type === "call" ? -1 : 1;
         return Math.abs(a.strike - price) - Math.abs(b.strike - price);
       });
-    }, [data, price, typeFilter, moneynessFilter]);
+    }, [data, price, typeFilter, moneynessFilter, isBr, selectedDias]);
     return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Op\xE7\xF5es \xB7 ", item.ticker), /* @__PURE__ */ React.createElement("div", { className: "opt-filters" }, /* @__PURE__ */ React.createElement("div", { className: "opt-filter-group" }, [{ k: 0, l: "Mais pr\xF3ximo" }, { k: 1, l: "Seguinte" }].map((v) => /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -1035,7 +1098,7 @@
         onClick: () => setMoneynessFilter(v.k)
       },
       v.l
-    )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", market === "BR" ? "A B3 provavelmente n\xE3o est\xE1 coberta pela fonte de dados gratuita que uso (Yahoo Finance cobre bem o mercado americano, mas n\xE3o op\xE7\xF5es da bolsa brasileira). Pra ver a grade completa, tenta opcoes.net.br ou statusinvest.com.br." : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 4 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 } }, "\u2B50 = melhor retorno direcional por decaimento di\xE1rio (|\u0394| / |\u0398|), calculado via Black-Scholes a partir da volatilidade impl\xEDcita \u2014 n\xE3o \xE9 garantia de resultado."), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0394"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0398/dia"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px" } })), rows.map((o) => {
+    )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", isBr ? `${error} O layout do portal da OpLab pode ter mudado \u2014 me avisa que eu ajusto o parser. Enquanto isso, d\xE1 pra ver direto em opcoes.oplab.com.br/mercado/acoes/opcoes/${item.ticker}.` : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 4 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", isBr ? selectedDias != null ? `${selectedDias} dias \xFAteis` : "\u2014" : currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 } }, "\u2B50 = melhor retorno direcional por decaimento di\xE1rio (|\u0394| / |\u0398|), calculado via Black-Scholes a partir da volatilidade impl\xEDcita \u2014 n\xE3o \xE9 garantia de resultado.", isBr && " Dados via portal p\xFAblico da OpLab, cota\xE7\xE3o com 15min de atraso."), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0394"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0398/dia"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px" } })), rows.map((o) => {
       const isBest = bestByType[o.type] === o.contractSymbol;
       return /* @__PURE__ */ React.createElement("div", { key: o.contractSymbol, className: `opt-row ${isBest ? "opt-best" : ""}` }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px", color: o.type === "call" ? "var(--green)" : "var(--red)", fontWeight: 700 } }, o.type === "call" ? "CALL" : "PUT"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.strike, market), o.moneyness === "atm" && /* @__PURE__ */ React.createElement("span", { className: "opt-atm-tag", style: { marginLeft: 6 } }, "ATM")), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.lastPrice, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.delta != null ? o.delta.toFixed(2) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.theta != null ? o.theta.toFixed(3) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px", textAlign: "right" } }, isBest && "\u2B50"));
     })), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
