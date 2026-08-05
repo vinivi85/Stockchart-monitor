@@ -94,7 +94,8 @@ Deno.serve(async (req) => {
 
       const toNum = (s) => {
         if (!s) return null;
-        const n = parseFloat(String(s).replace(/\./g, '').replace(',', '.'));
+        const cleaned = String(s).replace(/[^\d.,\-]/g, ''); // remove "R$", espaços, "%", etc.
+        const n = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
         return isNaN(n) ? null : n;
       };
 
