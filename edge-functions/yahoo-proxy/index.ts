@@ -110,11 +110,12 @@ Deno.serve(async (req) => {
       for (const tr of trMatches) {
         const cells = (tr.match(/<td[^>]*>[\s\S]*?<\/td>/g) || [])
           .map(td => td.replace(/<[^>]+>/g, '').trim());
-        if (cells.length < 13) continue;
+        if (cells.length < 8) continue; // precisa pelo menos até "Último"
         const [code, tipo, strikeRaw, volRaw, moneyness, diasRaw, teoricoRaw, deltaRaw,
-          lastRaw, varRaw, midRaw, bidRaw, askRaw] = cells;
+          lastRaw, varRaw, midRaw, bidRaw, askRaw, volFinRaw, viRaw, veRaw, exercicioRaw] = cells;
         if (!code || !/CALL|PUT/i.test(tipo || '')) continue;
         const diasMatch = (diasRaw || '').match(/(\d+)/);
+        const exercicioUpper = (exercicioRaw || '').toUpperCase();
         rows.push({
           contractSymbol: code,
           type: /CALL/i.test(tipo) ? 'call' : 'put',
@@ -126,6 +127,8 @@ Deno.serve(async (req) => {
           lastPrice: toNum(lastRaw),
           bid: toNum(bidRaw),
           ask: toNum(askRaw),
+          exercicio: exercicioUpper.includes('EUROP') ? 'europeia'
+            : exercicioUpper.includes('AMERIC') ? 'americana' : null,
         });
       }
 

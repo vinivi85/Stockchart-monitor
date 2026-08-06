@@ -987,7 +987,8 @@
         theta,
         dias: o.dias,
         moneyness: o.moneyness.toLowerCase(),
-        score
+        score,
+        exercicio: o.exercicio
       };
     });
   }
@@ -1000,6 +1001,7 @@
     const [expIndex, setExpIndex] = useState(0);
     const [typeFilter, setTypeFilter] = useState("ambos");
     const [moneynessFilter, setMoneynessFilter] = useState("ambos");
+    const [exerciseFilter, setExerciseFilter] = useState("ambos");
     useEffect(() => {
       let cancelled = false;
       setLoading(true);
@@ -1073,11 +1075,12 @@
       }
       if (typeFilter !== "ambos") combined = combined.filter((o) => o.type === typeFilter);
       if (moneynessFilter !== "ambos") combined = combined.filter((o) => o.moneyness === moneynessFilter);
+      if (isBr && exerciseFilter !== "ambos") combined = combined.filter((o) => o.exercicio === exerciseFilter);
       return combined.sort((a, b) => {
         if (a.type !== b.type) return a.type === "call" ? -1 : 1;
         return Math.abs(a.strike - price) - Math.abs(b.strike - price);
       });
-    }, [data, price, typeFilter, moneynessFilter, isBr, selectedDias]);
+    }, [data, price, typeFilter, moneynessFilter, exerciseFilter, isBr, selectedDias]);
     return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Op\xE7\xF5es \xB7 ", item.ticker), /* @__PURE__ */ React.createElement("div", { className: "opt-filters" }, /* @__PURE__ */ React.createElement("div", { className: "opt-filter-group" }, [{ k: 0, l: "Mais pr\xF3ximo" }, { k: 1, l: "Seguinte" }].map((v) => /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -1100,6 +1103,14 @@
         key: v.k,
         className: `opt-chip ${moneynessFilter === v.k ? "active" : ""}`,
         onClick: () => setMoneynessFilter(v.k)
+      },
+      v.l
+    ))), isBr && /* @__PURE__ */ React.createElement("div", { className: "opt-filter-group" }, [{ k: "ambos", l: "Amer.+Europ." }, { k: "americana", l: "Americana" }, { k: "europeia", l: "Europeia" }].map((v) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: v.k,
+        className: `opt-chip ${exerciseFilter === v.k ? "active" : ""}`,
+        onClick: () => setExerciseFilter(v.k)
       },
       v.l
     )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", isBr ? `${error} O layout do portal da OpLab pode ter mudado \u2014 me avisa que eu ajusto o parser. Enquanto isso, d\xE1 pra ver direto em opcoes.oplab.com.br/mercado/acoes/opcoes/${item.ticker}.` : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 4 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", isBr ? selectedDias != null ? `${selectedDias} dias \xFAteis` : "\u2014" : currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 } }, "\u2B50 = melhor retorno direcional por decaimento di\xE1rio (|\u0394| / |\u0398|), calculado via Black-Scholes a partir da volatilidade impl\xEDcita \u2014 n\xE3o \xE9 garantia de resultado.", isBr && " Dados via portal p\xFAblico da OpLab, cota\xE7\xE3o com 15min de atraso."), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0394"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0398/dia"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px" } })), rows.map((o) => {
