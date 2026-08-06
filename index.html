@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>Stock Monitor</title>
 <link rel="manifest" href="./manifest.json" />
 <meta name="theme-color" content="#0a0e14" />
@@ -50,19 +50,19 @@
     letter-spacing:1px;}
   .market-tab.active{color:var(--bg);background:var(--cyan);}
 
-  .content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
     padding:14px calc(16px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));}
 
   .watch-item{display:flex;align-items:center;justify-content:space-between;padding:14px;
     background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;
-    cursor:pointer;position:relative;}
+    cursor:pointer;position:relative;gap:10px;overflow:hidden;}
   .watch-item:active{background:var(--panel-2);}
-  .watch-left{display:flex;flex-direction:column;gap:4px;}
+  .watch-left{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
   .watch-ticker{font-family:var(--mono);font-weight:700;font-size:15px;}
   .watch-name{font-size:11px;color:var(--text-dim);}
-  .watch-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+  .watch-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;max-width:52%;text-align:right;}
   .watch-price{font-family:var(--mono);font-weight:700;font-size:15px;}
-  .watch-pos{font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .watch-pos{font-family:var(--mono);font-size:11px;color:var(--text-dim);white-space:normal;word-break:break-word;}
   .watch-pos.pos{color:var(--green);}
   .watch-pos.neg{color:var(--red);}
   .signal-dot{position:absolute;top:10px;left:10px;width:8px;height:8px;border-radius:50%;
