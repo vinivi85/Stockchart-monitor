@@ -84,6 +84,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (type === 'dividends') {
+      const [summaryRes, historyRes] = await Promise.all([
+        fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail,defaultKeyStatistics`,
+          { headers: { 'User-Agent': 'Mozilla/5.0' } }),
+        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=2y&interval=1mo&events=div`,
+          { headers: { 'User-Agent': 'Mozilla/5.0' } }),
+      ]);
+      const summaryJson = await summaryRes.json();
+      const historyJson = await historyRes.json();
+
+      const detail = summaryJson?.quoteSummary?.result?.[0]?.summaryDetail;
+      const price = detail?.previousClose?.raw ?? null;
+      const dividendYield = detail?.dividendYield?.raw ?? null; // fração (ex: 0.045 = 4.5%)
+      const dividendRate = detail?.dividendRate?.raw ?? null; // valor anual estimado
+      const exDividendDate = detail?.exDividendDate?.raw ?? null; // unix seconds
+
+      const divEvents = historyJson?.chart?.result?.[0]?.events?.dividends || {};
+      const history = Object.values(divEvents)
+        .map((d) => ({ date: d.date, amount: d.amount }))
+        .sort((a, b) => b.date - a.date)
+        .slice(0, 6);
+
+      return new Response(JSON.stringify({ price, dividendYield, dividendRate, exDividendDate, history }), {
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (type === 'br_options') {
       // Fonte: portal público e gratuito da OpLab (sem login/token).
       // Não é API oficial — extraímos direto do HTML. Se o layout deles mudar,

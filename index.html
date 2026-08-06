@@ -45,7 +45,7 @@
 
   .market-tabs{display:flex;gap:0;margin:12px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));
     border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--panel);}
-  .market-tab{flex:1;padding:10px;text-align:center;font-family:var(--mono);font-size:13px;
+  .market-tab{flex:1;padding:10px 4px;text-align:center;font-family:var(--mono);font-size:11px;
     font-weight:700;color:var(--text-dim);background:transparent;border:none;cursor:pointer;
     letter-spacing:1px;}
   .market-tab.active{color:var(--bg);background:var(--cyan);}
@@ -473,6 +473,14 @@
     if (!res.ok) throw new Error("Falha ao buscar hist\xF3rico");
     return res.json();
   }
+  async function fetchDividends(market, ticker) {
+    const symbol = toYahooSymbol(market, ticker);
+    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=dividends`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) throw new Error("Falha ao buscar dividendos");
+    return res.json();
+  }
   async function fetchOptions(market, ticker, dateUnix) {
     const symbol = toYahooSymbol(market, ticker);
     const dateParam = dateUnix ? `&date=${dateUnix}` : "";
@@ -487,6 +495,14 @@
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
     });
     if (!res.ok) throw new Error("Falha ao buscar op\xE7\xF5es");
+    return res.json();
+  }
+  async function fetchDividends(market, ticker) {
+    const symbol = toYahooSymbol(market, ticker);
+    const res = await fetch(`${QUOTE_PROXY_URL}?symbol=${symbol}&type=dividends`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) throw new Error("Falha ao buscar dividendos");
     return res.json();
   }
   function fmtCurrency(v, market) {
@@ -510,6 +526,45 @@
     if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
     if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
     return String(v);
+  }
+  function DividendsView({ items, data, onAdd }) {
+    if (items.length === 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "empty" }, "Nenhuma a\xE7\xE3o pagadora de dividendos adicionada ainda.", /* @__PURE__ */ React.createElement("br", null), "Toque no + para adicionar.");
+    }
+    return /* @__PURE__ */ React.createElement("div", null, items.map((item) => {
+      const d = data[item.id];
+      const yieldPct = (d == null ? void 0 : d.dividendYield) != null ? (d.dividendYield * 100).toFixed(2) : null;
+      const annualIncome = (d == null ? void 0 : d.dividendRate) != null && item.quantity ? d.dividendRate * item.quantity : null;
+      return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", style: { cursor: "default" } }, /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker, " ", /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: "var(--text-dim)", fontWeight: 400 } }, "\xB7 ", item.market)), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name), /* @__PURE__ */ React.createElement("div", { className: "trend-row" }, yieldPct != null && /* @__PURE__ */ React.createElement("span", { className: "trend-pill trend-alta" }, yieldPct, "% DY"), (d == null ? void 0 : d.exDividendDate) && /* @__PURE__ */ React.createElement("span", { className: "rec-pill rec-esperar" }, "Ex: ", new Date(d.exDividendDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" })))), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price" }, d ? fmtCurrency(d.price, item.market) : "\u2026"), /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, (d == null ? void 0 : d.dividendRate) != null ? `${fmtCurrency(d.dividendRate, item.market)}/ano/a\xE7\xE3o` : "sem dado"), annualIncome != null && /* @__PURE__ */ React.createElement("div", { className: "watch-pos pos" }, fmtCurrency(annualIncome, item.market), "/ano estimado")));
+    }));
+  }
+  function AddDividendModal({ onClose, onAdded }) {
+    const [market, setMarket] = useState("BR");
+    const [ticker, setTicker] = useState("");
+    const [name, setName] = useState("");
+    const [qty, setQty] = useState("");
+    const [saving, setSaving] = useState(false);
+    const save = async () => {
+      if (!ticker.trim()) return;
+      setSaving(true);
+      try {
+        const yahoo_symbol = toYahooSymbol(market, ticker.trim().toUpperCase());
+        await supabase.from("dividend_watchlist").insert({
+          market,
+          ticker: ticker.trim().toUpperCase(),
+          yahoo_symbol,
+          name: name.trim() || null,
+          quantity: qty ? parseFloat(qty) : 0
+        });
+        onAdded();
+        onClose();
+      } catch (e) {
+        alert("Erro ao adicionar: " + e.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+    return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Adicionar em Dividendos"), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Mercado"), /* @__PURE__ */ React.createElement("select", { value: market, onChange: (e) => setMarket(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "BR" }, "B3 \xB7 Brasil"), /* @__PURE__ */ React.createElement("option", { value: "US" }, "US \xB7 Am\xE9rica"))), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Ticker (", market === "BR" ? "ex: ITSA4" : "ex: O", ")"), /* @__PURE__ */ React.createElement("input", { value: ticker, onChange: (e) => setTicker(e.target.value), placeholder: market === "BR" ? "ITSA4" : "O" })), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Nome (opcional)"), /* @__PURE__ */ React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "Ita\xFAsa" })), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Quantidade (opcional, pra calcular renda anual estimada)"), /* @__PURE__ */ React.createElement("input", { value: qty, onChange: (e) => setQty(e.target.value), type: "number", placeholder: "0" })), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", disabled: saving, onClick: save }, saving ? "Salvando\u2026" : "Adicionar"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: onClose }, "Cancelar")));
   }
   function AddTickerModal({ market, onClose, onAdded }) {
     const [ticker, setTicker] = useState("");
@@ -1186,7 +1241,63 @@
       return /* @__PURE__ */ React.createElement("div", { className: "rule-card", key: rule.id }, /* @__PURE__ */ React.createElement("div", { className: "rule-top" }, /* @__PURE__ */ React.createElement("span", { className: "rule-indicator" }, ((_a = INDICATORS.find((i) => i.key === rule.indicator_type)) == null ? void 0 : _a.label) || rule.indicator_type), /* @__PURE__ */ React.createElement("button", { className: `rule-toggle ${rule.active ? "on" : ""}`, onClick: () => toggleRule(rule) }, /* @__PURE__ */ React.createElement("div", { className: "knob" }))), /* @__PURE__ */ React.createElement("div", { className: "rule-params" }, JSON.stringify(rule.params), " \xB7 checa a cada ", rule.check_interval_minutes, "min"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-danger", style: { marginTop: 8, padding: "8px" }, onClick: () => deleteRule(rule) }, "Remover"));
     }), /* @__PURE__ */ React.createElement("div", { className: "field", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("label", null, "Novo indicador"), /* @__PURE__ */ React.createElement("select", { value: addingIndicator, onChange: (e) => setAddingIndicator(e.target.value) }, INDICATORS.map((ind) => /* @__PURE__ */ React.createElement("option", { key: ind.key, value: ind.key }, ind.label)))), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Intervalo de checagem"), /* @__PURE__ */ React.createElement("select", { value: interval, onChange: (e) => setIntervalVal(parseInt(e.target.value)) }, /* @__PURE__ */ React.createElement("option", { value: 5 }, "5 minutos"), /* @__PURE__ */ React.createElement("option", { value: 15 }, "15 minutos"), /* @__PURE__ */ React.createElement("option", { value: 30 }, "30 minutos"))), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", onClick: addRule }, "Adicionar regra"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: onClose }, "Fechar")));
   }
+  function fmtPercent(v) {
+    if (v == null || isNaN(v)) return "\u2014";
+    return `${(v * 100).toFixed(2)}%`;
+  }
+  function fmtDate(unixSeconds) {
+    if (!unixSeconds) return "\u2014";
+    return new Date(unixSeconds * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+  }
+  function AddDividendModal({ onClose, onAdded }) {
+    const [market, setMarket] = useState("BR");
+    const [ticker, setTicker] = useState("");
+    const [name, setName] = useState("");
+    const [saving, setSaving] = useState(false);
+    const save = async () => {
+      if (!ticker.trim()) return;
+      setSaving(true);
+      try {
+        const tickerUpper = ticker.trim().toUpperCase();
+        const yahoo_symbol = toYahooSymbol(market, tickerUpper);
+        const { error } = await supabase.from("dividend_watchlist").insert({
+          market,
+          ticker: tickerUpper,
+          yahoo_symbol,
+          name: name.trim() || null
+        });
+        if (error) throw error;
+        onAdded();
+        onClose();
+      } catch (e) {
+        alert("Erro ao adicionar: " + e.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+    return /* @__PURE__ */ React.createElement("div", { className: "modal-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("h3", null, "Adicionar pagadora de dividendos"), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Mercado"), /* @__PURE__ */ React.createElement("select", { value: market, onChange: (e) => setMarket(e.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "BR" }, "B3 \xB7 Brasil"), /* @__PURE__ */ React.createElement("option", { value: "US" }, "US \xB7 Am\xE9rica"))), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Ticker (", market === "BR" ? "ex: ITSA4" : "ex: MAIN", ")"), /* @__PURE__ */ React.createElement("input", { value: ticker, onChange: (e) => setTicker(e.target.value), placeholder: market === "BR" ? "ITSA4" : "MAIN" })), /* @__PURE__ */ React.createElement("div", { className: "field" }, /* @__PURE__ */ React.createElement("label", null, "Nome (opcional)"), /* @__PURE__ */ React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "Ita\xFAsa" })), /* @__PURE__ */ React.createElement("button", { className: "btn btn-primary", disabled: saving, onClick: save }, saving ? "Salvando\u2026" : "Adicionar"), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", onClick: onClose }, "Cancelar")));
+  }
+  function DividendsView({ items, data, onRemove }) {
+    if (items.length === 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "empty" }, "Nenhuma pagadora de dividendos adicionada ainda.", /* @__PURE__ */ React.createElement("br", null), "Toque no + para adicionar.");
+    }
+    return /* @__PURE__ */ React.createElement("div", null, items.map((item) => {
+      var _a;
+      const d = data[item.id];
+      const lastDiv = (_a = d == null ? void 0 : d.history) == null ? void 0 : _a[0];
+      return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", style: { cursor: "default" } }, /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name), /* @__PURE__ */ React.createElement("div", { className: "watch-name", style: { marginTop: 2 } }, item.market === "BR" ? "B3" : "US")), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price", style: { color: "var(--green)" } }, d ? fmtPercent(d.dividendYield) : "\u2026"), /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, lastDiv ? `${fmtCurrency(lastDiv.amount, item.market)} \xB7 ${fmtDate(lastDiv.date)}` : d ? "sem hist\xF3rico" : "\u2026")), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          className: "opt-btn",
+          style: { position: "absolute", top: 10, right: 10 },
+          onClick: () => onRemove(item)
+        },
+        "\u2715"
+      ));
+    }));
+  }
   function App() {
+    const [view, setView] = useState("watchlist");
     const [market, setMarket] = useState("BR");
     const [items, setItems] = useState([]);
     const [quotes, setQuotes] = useState({});
@@ -1196,6 +1307,9 @@
     const [analysis, setAnalysis] = useState({});
     const [analyzing, setAnalyzing] = useState(false);
     const [optionsItem, setOptionsItem] = useState(null);
+    const [dividendItems, setDividendItems] = useState([]);
+    const [dividendData, setDividendData] = useState({});
+    const [showAddDividend, setShowAddDividend] = useState(false);
     const loadWatchlist = useCallback(async () => {
       const { data: wl } = await supabase.from("watchlist").select("*").eq("market", market);
       setItems(wl || []);
@@ -1220,6 +1334,27 @@
     useEffect(() => {
       loadWatchlist();
     }, [loadWatchlist]);
+    const loadDividends = useCallback(async () => {
+      const { data: dl } = await supabase.from("dividend_watchlist").select("*");
+      setDividendItems(dl || []);
+      if (dl && dl.length) {
+        const map = {};
+        await Promise.all(dl.map(async (item) => {
+          try {
+            map[item.id] = await fetchDividends(item.market, item.ticker);
+          } catch (e) {
+          }
+        }));
+        setDividendData(map);
+      }
+    }, []);
+    useEffect(() => {
+      if (view === "dividends") loadDividends();
+    }, [view, loadDividends]);
+    const removeDividend = async (item) => {
+      await supabase.from("dividend_watchlist").delete().eq("id", item.id);
+      loadDividends();
+    };
     const runAnalysis = async () => {
       if (analyzing || items.length === 0) return;
       setAnalyzing(true);
@@ -1238,7 +1373,34 @@
     if (selected) {
       return /* @__PURE__ */ React.createElement(TickerDetail, { item: selected, market, onBack: () => setSelected(null) });
     }
-    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "topbar" }, /* @__PURE__ */ React.createElement("div", { className: "brand" }, "STOCK", /* @__PURE__ */ React.createElement("span", { className: "dim" }, "\xB7MONITOR"))), /* @__PURE__ */ React.createElement("div", { className: "market-tabs" }, /* @__PURE__ */ React.createElement("button", { className: `market-tab ${market === "BR" ? "active" : ""}`, onClick: () => setMarket("BR") }, "B3 \xB7 BRASIL"), /* @__PURE__ */ React.createElement("button", { className: `market-tab ${market === "US" ? "active" : ""}`, onClick: () => setMarket("US") }, "US \xB7 AM\xC9RICA")), items.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "analyze-bar" }, /* @__PURE__ */ React.createElement("button", { className: "btn-analyze", disabled: analyzing, onClick: runAnalysis }, analyzing ? "Analisando\u2026" : "\u{1F4C8} Analisar tend\xEAncias")), /* @__PURE__ */ React.createElement("div", { className: "content" }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "topbar" }, /* @__PURE__ */ React.createElement("div", { className: "brand" }, "STOCK", /* @__PURE__ */ React.createElement("span", { className: "dim" }, "\xB7MONITOR"))), /* @__PURE__ */ React.createElement("div", { className: "market-tabs" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        className: `market-tab ${view === "watchlist" && market === "BR" ? "active" : ""}`,
+        onClick: () => {
+          setView("watchlist");
+          setMarket("BR");
+        }
+      },
+      "B3"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        className: `market-tab ${view === "watchlist" && market === "US" ? "active" : ""}`,
+        onClick: () => {
+          setView("watchlist");
+          setMarket("US");
+        }
+      },
+      "US"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        className: `market-tab ${view === "dividends" ? "active" : ""}`,
+        onClick: () => setView("dividends")
+      },
+      "DIVIDENDOS"
+    )), view === "watchlist" && items.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "analyze-bar" }, /* @__PURE__ */ React.createElement("button", { className: "btn-analyze", disabled: analyzing, onClick: runAnalysis }, analyzing ? "Analisando\u2026" : "\u{1F4C8} Analisar tend\xEAncias")), /* @__PURE__ */ React.createElement("div", { className: "content" }, view === "watchlist" ? /* @__PURE__ */ React.createElement(
       WatchlistView,
       {
         market,
@@ -1249,7 +1411,7 @@
         onOpen: setSelected,
         onOptions: setOptionsItem
       }
-    )), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { key: market + "-" + Date.now(), market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }), optionsItem && /* @__PURE__ */ React.createElement(OptionsModal, { item: optionsItem, market, onClose: () => setOptionsItem(null) }));
+    ) : /* @__PURE__ */ React.createElement(DividendsView, { items: dividendItems, data: dividendData, onRemove: removeDividend })), /* @__PURE__ */ React.createElement("button", { className: "fab", onClick: () => view === "dividends" ? setShowAddDividend(true) : setShowAdd(true) }, "+"), showAdd && /* @__PURE__ */ React.createElement(AddTickerModal, { key: market + "-" + Date.now(), market, onClose: () => setShowAdd(false), onAdded: loadWatchlist }), showAddDividend && /* @__PURE__ */ React.createElement(AddDividendModal, { onClose: () => setShowAddDividend(false), onAdded: loadDividends }), optionsItem && /* @__PURE__ */ React.createElement(OptionsModal, { item: optionsItem, market, onClose: () => setOptionsItem(null) }));
   }
   function BootError({ missing }) {
     return /* @__PURE__ */ React.createElement("div", { style: { padding: 24, fontFamily: "monospace", color: "#f87171" } }, /* @__PURE__ */ React.createElement("h3", null, "Falha ao carregar bibliotecas externas"), /* @__PURE__ */ React.createElement("p", null, "N\xE3o encontrado: ", missing.join(", ")), /* @__PURE__ */ React.createElement("p", { style: { color: "#7c8a9c", fontSize: 13 } }, "Verifique sua conex\xE3o e recarregue a p\xE1gina. Se persistir, algum CDN pode estar bloqueado."));

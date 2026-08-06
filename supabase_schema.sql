@@ -63,3 +63,16 @@ create index if not exists idx_watchlist_market on watchlist(market);
 create index if not exists idx_rules_watchlist on monitoring_rules(watchlist_id);
 create index if not exists idx_rules_active on monitoring_rules(active) where active = true;
 create index if not exists idx_alerts_watchlist on alerts_log(watchlist_id);
+
+-- ============================================================
+-- Módulo Dividendos
+-- ============================================================
+create table if not exists dividend_watchlist (
+  id uuid primary key default gen_random_uuid(),
+  market text not null check (market in ('BR', 'US')),
+  ticker text not null,
+  yahoo_symbol text not null,
+  name text,
+  created_at timestamptz not null default now(),
+  unique (market, ticker)
+);
