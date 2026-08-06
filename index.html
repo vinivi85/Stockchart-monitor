@@ -80,18 +80,22 @@
   .opt-btn{padding:3px 9px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);
     color:var(--text-dim);font-family:var(--mono);font-size:10px;font-weight:700;cursor:pointer;}
   .opt-row{display:flex;justify-content:space-between;gap:16px;font-family:var(--mono);font-size:12px;
-    padding:6px 0;border-bottom:1px solid var(--border);}
-  .opt-row.opt-header{color:var(--text-dim);font-size:10px;border-bottom:1px solid var(--border);}
+    padding:2px 0;}
+  .opt-row.opt-header{color:var(--text-dim);font-size:10px;padding:6px 0;border-bottom:1px solid var(--border);}
   .opt-atm-tag{font-size:9px;font-weight:700;color:var(--cyan);background:rgba(79,195,247,0.15);
     padding:2px 6px;border-radius:10px;}
+
+  .opt-row-wrap{padding:6px 0;border-bottom:1px solid var(--border);}
+  .opt-code{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:2px;letter-spacing:0.3px;}
 
   .opt-filters{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
   .opt-filter-group{display:flex;gap:6px;flex-wrap:wrap;}
   .opt-chip{padding:6px 11px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);
     color:var(--text-dim);font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;}
   .opt-chip.active{background:rgba(79,195,247,0.15);border-color:var(--cyan);color:var(--cyan);}
-  .opt-row.opt-best{background:rgba(251,191,36,0.08);margin:0 -12px;padding:6px 12px;
+  .opt-row-wrap.opt-best{background:rgba(251,191,36,0.08);margin:0 -12px;padding:6px 12px;
     border-radius:6px;border-bottom:1px solid rgba(251,191,36,0.25);}
+  .opt-row-wrap.opt-best .opt-code{color:var(--amber);}
 
   .analyze-bar{padding:10px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));}
   .btn-analyze{width:100%;padding:12px;border-radius:10px;border:1px solid var(--cyan);
@@ -1100,7 +1104,7 @@
       v.l
     )))), loading && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Carregando\u2026"), !loading && error && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 } }, "N\xE3o consegui carregar op\xE7\xF5es para ", item.ticker, ".", " ", isBr ? `${error} O layout do portal da OpLab pode ter mudado \u2014 me avisa que eu ajusto o parser. Enquanto isso, d\xE1 pra ver direto em opcoes.oplab.com.br/mercado/acoes/opcoes/${item.ticker}.` : "Tente novamente em instantes."), !loading && !error && data && rows.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-dim)", fontSize: 13 } }, "Nenhuma op\xE7\xE3o encontrada com esses filtros."), !loading && !error && data && rows.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 4 } }, "Pre\xE7o atual: ", fmtCurrency(price, market), " \xB7 Vencimento:", " ", isBr ? selectedDias != null ? `${selectedDias} dias \xFAteis` : "\u2014" : currentExpDate ? new Date(currentExpDate * 1e3).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 } }, "\u2B50 = melhor retorno direcional por decaimento di\xE1rio (|\u0394| / |\u0398|), calculado via Black-Scholes a partir da volatilidade impl\xEDcita \u2014 n\xE3o \xE9 garantia de resultado.", isBr && " Dados via portal p\xFAblico da OpLab, cota\xE7\xE3o com 15min de atraso."), /* @__PURE__ */ React.createElement("div", { className: "opt-row opt-header" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px" } }, "Tipo"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Strike"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, "Pr\xEAmio"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0394"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px" } }, "\u0398/dia"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px" } })), rows.map((o) => {
       const isBest = bestByType[o.type] === o.contractSymbol;
-      return /* @__PURE__ */ React.createElement("div", { key: o.contractSymbol, className: `opt-row ${isBest ? "opt-best" : ""}` }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px", color: o.type === "call" ? "var(--green)" : "var(--red)", fontWeight: 700 } }, o.type === "call" ? "CALL" : "PUT"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.strike, market), o.moneyness === "atm" && /* @__PURE__ */ React.createElement("span", { className: "opt-atm-tag", style: { marginLeft: 6 } }, "ATM")), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.lastPrice, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.delta != null ? o.delta.toFixed(2) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.theta != null ? o.theta.toFixed(3) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px", textAlign: "right" } }, isBest && "\u2B50"));
+      return /* @__PURE__ */ React.createElement("div", { key: o.contractSymbol, className: `opt-row-wrap ${isBest ? "opt-best" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "opt-code" }, o.contractSymbol), /* @__PURE__ */ React.createElement("div", { className: "opt-row" }, /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 40px", color: o.type === "call" ? "var(--green)" : "var(--red)", fontWeight: 700 } }, o.type === "call" ? "CALL" : "PUT"), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.strike, market), o.moneyness === "atm" && /* @__PURE__ */ React.createElement("span", { className: "opt-atm-tag", style: { marginLeft: 6 } }, "ATM")), /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, fmtCurrency(o.lastPrice, market)), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.delta != null ? o.delta.toFixed(2) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 50px", fontSize: 11 } }, o.theta != null ? o.theta.toFixed(3) : "\u2014"), /* @__PURE__ */ React.createElement("span", { style: { flex: "0 0 24px", textAlign: "right" } }, isBest && "\u2B50")));
     })), /* @__PURE__ */ React.createElement("button", { className: "btn btn-secondary", style: { marginTop: 16 }, onClick: onClose }, "Fechar")));
   }
   function IndicatorCategoryModal({ category, indicators, activeIndicators, onToggle, onParamChange, onClose }) {
