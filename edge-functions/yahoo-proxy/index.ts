@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
     if (type === 'dividends') {
       const [summaryRes, historyRes] = await Promise.all([
-        fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail,defaultKeyStatistics,calendarEvents`,
+        fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail,defaultKeyStatistics,calendarEvents,assetProfile,price`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }),
         fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=2y&interval=1mo&events=div`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }),
@@ -96,10 +96,13 @@ Deno.serve(async (req) => {
 
       const detail = summaryJson?.quoteSummary?.result?.[0]?.summaryDetail;
       const calendar = summaryJson?.quoteSummary?.result?.[0]?.calendarEvents;
-      const price = detail?.previousClose?.raw ?? null;
+      const profile = summaryJson?.quoteSummary?.result?.[0]?.assetProfile;
+      const priceModule = summaryJson?.quoteSummary?.result?.[0]?.price;
+      const price = priceModule?.regularMarketPrice?.raw ?? detail?.previousClose?.raw ?? null;
       const dividendYield = detail?.dividendYield?.raw ?? null; // fração (ex: 0.045 = 4.5%)
       const dividendRate = detail?.dividendRate?.raw ?? null; // valor anual estimado
       const exDividendDate = detail?.exDividendDate?.raw ?? null; // unix seconds
+      const sector = profile?.sector ?? null;
       // próximo pagamento — estimativa do Yahoo, só disponível pro próximo dividendo,
       // não temos as datas de pagamento passadas de forma confiável (só a ex-dividendo)
       const nextPaymentDate = calendar?.dividendDate?.raw ?? null;
@@ -111,7 +114,7 @@ Deno.serve(async (req) => {
         .slice(0, 6);
 
       return new Response(JSON.stringify({
-        price, dividendYield, dividendRate, exDividendDate, nextPaymentDate, history,
+        price, dividendYield, dividendRate, exDividendDate, nextPaymentDate, sector, history,
       }), {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
