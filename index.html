@@ -575,7 +575,11 @@
       const recLabel = { comprar: "Comprar", vender: "Vender", esperar: "Esperar" };
       return /* @__PURE__ */ React.createElement("div", { key: item.id, className: "watch-item", onClick: () => onOpen(item) }, item.hasSignal && /* @__PURE__ */ React.createElement("div", { className: "signal-dot" }), /* @__PURE__ */ React.createElement("div", { className: "watch-left" }, /* @__PURE__ */ React.createElement("div", { className: "watch-ticker" }, item.ticker), item.name && /* @__PURE__ */ React.createElement("div", { className: "watch-name" }, item.name), /* @__PURE__ */ React.createElement("div", { className: "trend-row" }, a && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: `trend-pill trend-${a.trend}` }, a.trend === "alta" ? "\u2191 Alta" : "\u2193 Baixa"), /* @__PURE__ */ React.createElement("span", { className: `rec-pill rec-${a.recommendation}` }, recLabel[a.recommendation])), /* @__PURE__ */ React.createElement("button", { className: "opt-btn", onClick: (e) => {
         e.stopPropagation();
-        onOptions(item);
+        if (market === "BR") {
+          window.open(`https://opcoes.oplab.com.br/mercado/acoes/opcoes/${item.ticker}`, "_blank");
+        } else {
+          onOptions(item);
+        }
       } }, "Op\xE7\xF5es"))), /* @__PURE__ */ React.createElement("div", { className: "watch-right" }, /* @__PURE__ */ React.createElement("div", { className: "watch-price" }, q ? fmtCurrency(q.price, market) : "\u2026"), pos ? /* @__PURE__ */ React.createElement("div", { className: `watch-pos ${posDiff >= 0 ? "pos" : "neg"}` }, pos.quantity, " un \xB7 ", fmtCurrency(posValue, market)) : /* @__PURE__ */ React.createElement("div", { className: "watch-pos" }, "sem posi\xE7\xE3o")));
     }));
   }
