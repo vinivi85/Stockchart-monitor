@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
     if (type === 'dividends') {
       const [summaryRes, historyRes] = await Promise.all([
-        fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail,defaultKeyStatistics`,
+        fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail,defaultKeyStatistics,calendarEvents`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }),
         fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=2y&interval=1mo&events=div`,
           { headers: { 'User-Agent': 'Mozilla/5.0' } }),
@@ -95,18 +95,24 @@ Deno.serve(async (req) => {
       const historyJson = await historyRes.json();
 
       const detail = summaryJson?.quoteSummary?.result?.[0]?.summaryDetail;
+      const calendar = summaryJson?.quoteSummary?.result?.[0]?.calendarEvents;
       const price = detail?.previousClose?.raw ?? null;
       const dividendYield = detail?.dividendYield?.raw ?? null; // fração (ex: 0.045 = 4.5%)
       const dividendRate = detail?.dividendRate?.raw ?? null; // valor anual estimado
       const exDividendDate = detail?.exDividendDate?.raw ?? null; // unix seconds
+      // próximo pagamento — estimativa do Yahoo, só disponível pro próximo dividendo,
+      // não temos as datas de pagamento passadas de forma confiável (só a ex-dividendo)
+      const nextPaymentDate = calendar?.dividendDate?.raw ?? null;
 
       const divEvents = historyJson?.chart?.result?.[0]?.events?.dividends || {};
       const history = Object.values(divEvents)
-        .map((d) => ({ date: d.date, amount: d.amount }))
-        .sort((a, b) => b.date - a.date)
+        .map((d) => ({ exDate: d.date, amount: d.amount })) // "date" aqui é a data ex-dividendo
+        .sort((a, b) => b.exDate - a.exDate)
         .slice(0, 6);
 
-      return new Response(JSON.stringify({ price, dividendYield, dividendRate, exDividendDate, history }), {
+      return new Response(JSON.stringify({
+        price, dividendYield, dividendRate, exDividendDate, nextPaymentDate, history,
+      }), {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
