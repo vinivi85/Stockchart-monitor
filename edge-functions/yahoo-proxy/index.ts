@@ -113,8 +113,17 @@ Deno.serve(async (req) => {
         .sort((a, b) => b.exDate - a.exDate)
         .slice(0, 6);
 
+      const debug = (price == null && sector == null && dividendYield == null)
+        ? {
+            summaryHttpStatus: summaryRes.status,
+            summaryError: summaryJson?.quoteSummary?.error ?? null,
+            summaryHasResult: !!summaryJson?.quoteSummary?.result,
+          }
+        : undefined;
+
       return new Response(JSON.stringify({
         price, dividendYield, dividendRate, exDividendDate, nextPaymentDate, sector, history,
+        ...(debug ? { debug } : {}),
       }), {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
